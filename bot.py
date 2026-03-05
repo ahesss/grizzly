@@ -16,7 +16,7 @@ API_BASE = "https://api.grizzlysms.com/stubs/handler_api.php"
 DB_PATH = os.environ.get("DB_PATH", "database.db")
 
 MAX_ORDER = 20         # Maksimal order sekaligus
-OTP_TIMEOUT = 1500     # Timeout 25 menit (1500 detik)
+OTP_TIMEOUT = 1200     # Timeout 20 menit (1200 detik)
 CHECK_INTERVAL = 5     # Cek OTP setiap 5 detik
 CANCEL_DELAY = 120     # Baru bisa cancel setelah 2 menit (120 detik)
 COUNTRY_CODE = "84"    # Vietnam country code
@@ -95,10 +95,12 @@ def format_order_message(orders, title=""):
         status = order.get('status', 'waiting')
 
         if status == 'waiting':
+            # Hitung sisa waktu
             elapsed = now - order.get('order_time', now)
             remaining = max(0, OTP_TIMEOUT - elapsed)
             mins = int(remaining // 60)
-            lines.append(f"{i}. `{number_local}` — ⏳ Menunggu OTP... (~{mins} menit)")
+            secs = int(remaining % 60)
+            lines.append(f"{i}. `{number_local}` — ⏳ Menunggu OTP... ({mins}m {secs}s)")
         elif status == 'got_otp':
             code = order.get('code', '???')
             lines.append(f"{i}. `{number_local}` — ✅ OTP: `{code}`")
@@ -107,7 +109,7 @@ def format_order_message(orders, title=""):
             lines.append(f"{i}. `{number_local}` — 🚫 Dibatalkan (Refund)")
             done_count += 1
         elif status == 'timeout':
-            lines.append(f"{i}. `{number_local}` — ⏰ Timeout (25 menit)")
+            lines.append(f"{i}. `{number_local}` — ⏰ Timeout (20 menit)")
             done_count += 1
         elif status == 'error':
             lines.append(f"{i}. `{number_local}` — ❌ Error")
@@ -147,7 +149,7 @@ def auto_check_otp(chat_id, message_id, orders, api_key):
     start_time = time.time()
     last_edit_time = 0
     EDIT_COOLDOWN = 3
-    TIMER_UPDATE = 60
+    TIMER_UPDATE = 15
     last_timer_update = 0
 
     try:
@@ -294,7 +296,7 @@ def help_cmd(message):
         "3️⃣ Bot akan otomatis cek OTP setiap 5 detik.\n"
         "   Ketika OTP masuk, akan langsung muncul di bawah nomor.\n\n"
         "4️⃣ Salin nomor (tanpa +84) langsung dari chat.\n\n"
-        "⏱ Timeout: 25 menit per order\n"
+        "⏱ Timeout: 20 menit per order\n"
         "🚫 Cancel: tersedia setelah 2 menit\n"
         "📱 Maks order: 20 nomor sekaligus\n\n"
         "💰 Cek saldo: `/balance`"
