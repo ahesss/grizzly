@@ -308,12 +308,7 @@ def start_cmd(message):
             InlineKeyboardButton("🇻🇳 Vietnam", callback_data="country_vietnam"),
             InlineKeyboardButton("🇨🇴 Colombia", callback_data="country_colombia")
         )
-    # Navigation bar
-    markup.row(
-        InlineKeyboardButton("🏠 Start", callback_data="nav_start"),
-        InlineKeyboardButton("🛒 Order", callback_data="nav_order"),
-        InlineKeyboardButton("💰 Saldo", callback_data="nav_balance")
-    )
+        markup.row(InlineKeyboardButton("💰 Cek Saldo", callback_data="nav_balance"))
     bot.send_message(message.chat.id, text, parse_mode="Markdown", reply_markup=markup)
 
 @bot.message_handler(commands=['help'])
@@ -520,20 +515,7 @@ def callback_q(call):
         bot.answer_callback_query(call.id, f"Memesan {count} nomor {country_label}...")
         process_bulk_order(call.message.chat.id, api_key, count, country_key)
 
-    # Navigation bar callbacks
-    elif data == "nav_start":
-        bot.answer_callback_query(call.id)
-        start_cmd(call.message)
-
-    elif data == "nav_order":
-        bot.answer_callback_query(call.id)
-        markup = InlineKeyboardMarkup()
-        markup.row(
-            InlineKeyboardButton("🇻🇳 Vietnam", callback_data="country_vietnam"),
-            InlineKeyboardButton("🇨🇴 Colombia", callback_data="country_colombia")
-        )
-        bot.send_message(call.message.chat.id, "🌍 *Pilih negara untuk order:*", parse_mode="Markdown", reply_markup=markup)
-
+    # Cek saldo callback
     elif data == "nav_balance":
         bot.answer_callback_query(call.id)
         bal_res = req_api(api_key, 'getBalance')
