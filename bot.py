@@ -19,9 +19,25 @@ MAX_ORDER = 20         # Maksimal order sekaligus
 OTP_TIMEOUT = 1200     # Timeout 20 menit (1200 detik)
 CHECK_INTERVAL = 5     # Cek OTP setiap 5 detik
 CANCEL_DELAY = 120     # Baru bisa cancel setelah 2 menit (120 detik)
-COUNTRY_CODE = "84"    # Vietnam country code
-COUNTRY_ID = "10"      # Vietnam country ID di GrizzlySMS
 SERVICE = "wa"         # WhatsApp service
+
+# =============================================
+# KONFIGURASI NEGARA
+# =============================================
+COUNTRIES = {
+    "vietnam": {
+        "name": "Vietnam",
+        "flag": "🇻🇳",
+        "country_id": "10",
+        "country_code": "84",
+    },
+    "colombia": {
+        "name": "Colombia",
+        "flag": "🇨🇴",
+        "country_id": "33",
+        "country_code": "57",
+    },
+}
 
 # Menyimpan data order aktif per chat_id agar callback bisa akses
 # Format: { chat_id: { message_id: [orders_list] } }
@@ -67,20 +83,26 @@ def req_api(api_key, action, **kwargs):
     except Exception as e:
         return f"ERROR: {str(e)}"
 
-def strip_country_code(number):
-    """Hapus country code +84 dari nomor Vietnam, sisakan nomor lokal saja"""
+def strip_country_code(number, country_code="84"):
+    """Hapus country code dari nomor, sisakan nomor lokal saja"""
     number = number.strip()
     if number.startswith("+"):
         number = number[1:]
-    if number.startswith(COUNTRY_CODE):
-        number = number[len(COUNTRY_CODE):]
+    if number.startswith(country_code):
+        number = number[len(country_code):]
     return number
+
+def get_country_label(country_key):
+    """Dapatkan label negara dengan flag"""
+    c = COUNTRIES.get(country_key, COUNTRIES["vietnam"])
+    return f"{c['name']} {c['flag']}"
 
 # =============================================
 # FORMAT PESAN ORDER
 # =============================================
-def format_order_message(orders, title=""):
+def format_order_message(orders, title="", country_key="vietnam"):
     """Format pesan daftar order dengan status OTP"""
+    country = COUNTRIES.get(country_key, COUNTRIES["vietnam"])
     lines = []
     if title:
         lines.append(title)
@@ -91,11 +113,10 @@ def format_order_message(orders, title=""):
     now = time.time()
 
     for i, order in enumerate(orders, 1):
-        number_local = strip_country_code(order['number'])
+        number_local = strip_country_code(order['number'], country['country_code'])
         status = order.get('status', 'waiting')
 
         if status == 'waiting':
-            # Hitung sisa waktu
             elapsed = now - order.get('order_time', now)
             remaining = max(0, OTP_TIMEOUT - elapsed)
             mins = int(remaining // 60)
@@ -144,8 +165,10 @@ def safe_edit_message(text, chat_id, message_id, markup=None):
 # =============================================
 # AUTO-CHECK OTP (BACKGROUND THREAD)
 # =============================================
-def auto_check_otp(chat_id, message_id, orders, api_key):
+def auto_check_otp(chat_id, message_id, orders, api_key, country_key="vietnam"):
     """Background thread yang otomatis cek OTP untuk semua order"""
+    country = COUNTRIES.get(country_key, COUNTRIES["vietnam"])
+    country_label = get_country_label(country_key)
     start_time = time.time()
     last_edit_time = 0
     EDIT_COOLDOWN = 3
@@ -156,7 +179,7 @@ def auto_check_otp(chat_id, message_id, orders, api_key):
         while True:
             waiting_orders = [o for o in orders if o['status'] == 'waiting']
             if not waiting_orders:
-                text = format_order_message(orders, "🛒 *Order WA Vietnam — Selesai*")
+                text = format_order_message(orders, f"🛒 *Order WA {country_label} — Selesai*", country_key)
                 safe_edit_message(text, chat_id, message_id)
                 break
 
@@ -170,7 +193,7 @@ def auto_check_otp(chat_id, message_id, orders, api_key):
                         except:
                             pass
                         time.sleep(0.5)
-                text = format_order_message(orders, "🛒 *Order WA Vietnam — Timeout*")
+                text = format_order_message(orders, f"🛒 *Order WA {country_label} — Timeout*", country_key)
                 safe_edit_message(text, chat_id, message_id)
                 break
 
@@ -201,7 +224,7 @@ def auto_check_otp(chat_id, message_id, orders, api_key):
 
             if should_update and (now - last_edit_time >= EDIT_COOLDOWN):
                 remaining = [o for o in orders if o['status'] == 'waiting']
-                text = format_order_message(orders, "🛒 *Order WA Vietnam*")
+                text = format_order_message(orders, f"🛒 *Order WA {country_label}*", country_key)
 
                 if remaining:
                     markup = InlineKeyboardMarkup()
@@ -234,7 +257,8 @@ def auto_check_otp(chat_id, message_id, orders, api_key):
     except Exception as e:
         print(f"Auto-check OTP thread error: {e}")
         try:
-            text = format_order_message(orders, "🛒 *Order WA Vietnam — Error*")
+            country_label = get_country_label(country_key)
+            text = format_order_message(orders, f"🛒 *Order WA {country_label} — Error*", country_key)
             text += f"\n\n⚠️ Bot error: cek ulang dengan /start"
             safe_edit_message(text, chat_id, message_id)
         except:
@@ -255,12 +279,15 @@ def start_cmd(message):
     api_key = get_user_api(user_id)
 
     text = (
-        "🐻 *Bot OTP WhatsApp Vietnam (GrizzlySMS)* 🇻🇳\n\n"
-        "Bot ini khusus untuk order nomor WhatsApp Vietnam.\n"
-        "OTP akan otomatis muncul di bawah nomor masing-masing.\n\n"
+        "🐻 *Bot OTP WhatsApp (GrizzlySMS)* \n\n"
+        "Bot ini untuk order nomor WhatsApp dengan OTP otomatis.\n"
+        "Pilih negara, lalu pilih jumlah nomor yang ingin di-order.\n\n"
+        "🌍 *Negara tersedia:*\n"
+        "🇻🇳 Vietnam (Country ID: 10)\n"
+        "🇨🇴 Colombia (Country ID: 33)\n\n"
         "📋 *Perintah:*\n"
         "`/setapi API_KEY` — Daftarkan API Key GrizzlySMS\n"
-        "`/order N` — Order N nomor sekaligus (maks 20)\n"
+        "`/order N` — Order N nomor (pilih negara dulu)\n"
         "`/balance` — Cek saldo\n"
         "`/help` — Bantuan\n\n"
     )
@@ -277,10 +304,9 @@ def start_cmd(message):
 
     markup = InlineKeyboardMarkup()
     if api_key:
-        markup.row(InlineKeyboardButton("🛒 Order 1 Nomor", callback_data="quick_1"))
         markup.row(
-            InlineKeyboardButton("🛒 Order 5", callback_data="quick_5"),
-            InlineKeyboardButton("🛒 Order 10", callback_data="quick_10")
+            InlineKeyboardButton("🇻🇳 Vietnam", callback_data="country_vietnam"),
+            InlineKeyboardButton("🇨🇴 Colombia", callback_data="country_colombia")
         )
     bot.send_message(message.chat.id, text, parse_mode="Markdown", reply_markup=markup)
 
@@ -291,11 +317,12 @@ def help_cmd(message):
         "1️⃣ Daftarkan API Key dari akun GrizzlySMS Anda:\n"
         "   `/setapi API_KEY_ANDA`\n\n"
         "   Dapatkan API Key di: https://grizzlysms.com/docs\n\n"
-        "2️⃣ Order nomor WA Vietnam (contoh 5 nomor):\n"
-        "   `/order 5`\n\n"
-        "3️⃣ Bot akan otomatis cek OTP setiap 5 detik.\n"
+        "2️⃣ Ketik `/start` lalu pilih negara:\n"
+        "   🇻🇳 Vietnam — Country ID 10\n"
+        "   🇨🇴 Colombia — Country ID 33\n\n"
+        "3️⃣ Pilih jumlah nomor yang ingin di-order (1, 5, atau 10)\n\n"
+        "4️⃣ Bot akan otomatis cek OTP setiap 5 detik.\n"
         "   Ketika OTP masuk, akan langsung muncul di bawah nomor.\n\n"
-        "4️⃣ Salin nomor (tanpa +84) langsung dari chat.\n\n"
         "⏱ Timeout: 20 menit per order\n"
         "🚫 Cancel: tersedia setelah 2 menit\n"
         "📱 Maks order: 20 nomor sekaligus\n\n"
@@ -317,7 +344,7 @@ def setapi_cmd(message):
     if 'ACCESS_BALANCE' in bal_res:
         bal = bal_res.split(':')[1]
         set_user_api(message.from_user.id, api_key)
-        bot.send_message(message.chat.id, f"✅ API Key valid & tersimpan!\n💰 Saldo: *{bal} RUB*\n\nKetik `/order 5` untuk mulai order.", parse_mode="Markdown")
+        bot.send_message(message.chat.id, f"✅ API Key valid & tersimpan!\n💰 Saldo: *{bal} RUB*\n\nKetik `/start` untuk pilih negara dan mulai order.", parse_mode="Markdown")
     else:
         bot.send_message(message.chat.id, "❌ API Key tidak valid atau server gangguan.")
 
@@ -342,30 +369,26 @@ def order_cmd(message):
         bot.reply_to(message, "❌ Belum ada API Key. Gunakan `/setapi API_KEY`", parse_mode="Markdown")
         return
 
-    parts = message.text.split()
-    count = 1
-    if len(parts) >= 2:
-        try:
-            count = int(parts[1])
-        except ValueError:
-            bot.reply_to(message, "❌ Format: `/order 5` (angka 1-20)", parse_mode="Markdown")
-            return
+    # Tampilkan pilihan negara dulu
+    markup = InlineKeyboardMarkup()
+    markup.row(
+        InlineKeyboardButton("🇻🇳 Vietnam", callback_data="country_vietnam"),
+        InlineKeyboardButton("🇨🇴 Colombia", callback_data="country_colombia")
+    )
+    bot.send_message(message.chat.id, "🌍 *Pilih negara untuk order:*", parse_mode="Markdown", reply_markup=markup)
 
-    if count < 1 or count > MAX_ORDER:
-        bot.reply_to(message, f"❌ Jumlah harus antara 1 dan {MAX_ORDER}.", parse_mode="Markdown")
-        return
-
-    process_bulk_order(message.chat.id, api_key, count)
-
-def process_bulk_order(chat_id, api_key, count):
+def process_bulk_order(chat_id, api_key, count, country_key="vietnam"):
     """Proses order banyak nomor sekaligus"""
-    msg = bot.send_message(chat_id, f"⏳ Sedang memesan {count} nomor WA Vietnam...", parse_mode="Markdown")
+    country = COUNTRIES.get(country_key, COUNTRIES["vietnam"])
+    country_label = get_country_label(country_key)
+
+    msg = bot.send_message(chat_id, f"⏳ Sedang memesan {count} nomor WA {country_label}...", parse_mode="Markdown")
 
     orders = []
     failed = 0
 
     for i in range(count):
-        res = req_api(api_key, 'getNumber', service=SERVICE, country=COUNTRY_ID)
+        res = req_api(api_key, 'getNumber', service=SERVICE, country=country['country_id'])
 
         if 'ACCESS_NUMBER' in res:
             parts = res.split(':')
@@ -377,7 +400,8 @@ def process_bulk_order(chat_id, api_key, count):
                     'number': number,
                     'status': 'waiting',
                     'code': None,
-                    'order_time': time.time()
+                    'order_time': time.time(),
+                    'country_key': country_key
                 })
         elif res == 'NO_BALANCE':
             bot.edit_message_text(
@@ -390,7 +414,7 @@ def process_bulk_order(chat_id, api_key, count):
         elif res == 'NO_NUMBERS':
             failed += 1
             if failed >= 3 and not orders:
-                bot.edit_message_text("❌ Nomor WA Vietnam sedang tidak tersedia.", chat_id, msg.message_id, parse_mode="Markdown")
+                bot.edit_message_text(f"❌ Nomor WA {country_label} sedang tidak tersedia.", chat_id, msg.message_id, parse_mode="Markdown")
                 return
         else:
             failed += 1
@@ -402,7 +426,7 @@ def process_bulk_order(chat_id, api_key, count):
         bot.edit_message_text("❌ Gagal memesan nomor. Coba lagi nanti.", chat_id, msg.message_id, parse_mode="Markdown")
         return
 
-    text = format_order_message(orders, "🛒 *Order WA Vietnam*")
+    text = format_order_message(orders, f"🛒 *Order WA {country_label}*", country_key)
 
     markup = InlineKeyboardMarkup()
     markup.row(InlineKeyboardButton(f"⏳ Cancel tersedia ~2 menit lagi", callback_data="cancel_wait"))
@@ -415,7 +439,7 @@ def process_bulk_order(chat_id, api_key, count):
 
     thread = threading.Thread(
         target=auto_check_otp,
-        args=(chat_id, msg.message_id, orders, api_key),
+        args=(chat_id, msg.message_id, orders, api_key, country_key),
         daemon=True
     )
     thread.start()
@@ -433,10 +457,60 @@ def callback_q(call):
         bot.answer_callback_query(call.id, "❌ Belum ada API Key. Gunakan /setapi", show_alert=True)
         return
 
-    if data.startswith("quick_"):
-        count = int(data.split("_")[1])
-        bot.answer_callback_query(call.id, f"Memesan {count} nomor...")
-        process_bulk_order(call.message.chat.id, api_key, count)
+    # Pilih negara → tampilkan submenu jumlah order
+    if data.startswith("country_"):
+        country_key = data.replace("country_", "")
+        if country_key not in COUNTRIES:
+            bot.answer_callback_query(call.id, "❌ Negara tidak valid.", show_alert=True)
+            return
+
+        country_label = get_country_label(country_key)
+        bot.answer_callback_query(call.id, f"Negara: {country_label}")
+
+        markup = InlineKeyboardMarkup()
+        markup.row(InlineKeyboardButton("🛒 Order 1 Nomor", callback_data=f"quick_{country_key}_1"))
+        markup.row(
+            InlineKeyboardButton("🛒 Order 5", callback_data=f"quick_{country_key}_5"),
+            InlineKeyboardButton("🛒 Order 10", callback_data=f"quick_{country_key}_10")
+        )
+        markup.row(InlineKeyboardButton("⬅️ Kembali", callback_data="back_to_country"))
+
+        text = f"🌍 *Negara: {country_label}*\n\nPilih jumlah nomor WA yang ingin di-order:"
+
+        try:
+            bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=markup)
+        except:
+            bot.send_message(call.message.chat.id, text, parse_mode="Markdown", reply_markup=markup)
+
+    # Kembali ke pilihan negara
+    elif data == "back_to_country":
+        bot.answer_callback_query(call.id)
+        markup = InlineKeyboardMarkup()
+        markup.row(
+            InlineKeyboardButton("🇻🇳 Vietnam", callback_data="country_vietnam"),
+            InlineKeyboardButton("🇨🇴 Colombia", callback_data="country_colombia")
+        )
+        text = "🌍 *Pilih negara untuk order:*"
+        try:
+            bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=markup)
+        except:
+            bot.send_message(call.message.chat.id, text, parse_mode="Markdown", reply_markup=markup)
+
+    # Quick order dengan negara
+    elif data.startswith("quick_"):
+        parts = data.split("_")
+        # Format: quick_{country_key}_{count}
+        if len(parts) == 3:
+            country_key = parts[1]
+            count = int(parts[2])
+        else:
+            # Legacy format: quick_{count} (default vietnam)
+            country_key = "vietnam"
+            count = int(parts[1])
+
+        country_label = get_country_label(country_key)
+        bot.answer_callback_query(call.id, f"Memesan {count} nomor {country_label}...")
+        process_bulk_order(call.message.chat.id, api_key, count, country_key)
 
     elif data == "cancel_wait":
         bot.answer_callback_query(call.id, "⏳ Belum bisa cancel. Harus tunggu minimal 2 menit sejak order.", show_alert=True)
@@ -452,6 +526,11 @@ def callback_q(call):
         orders_ref = None
         if chat_id in active_orders and msg_id in active_orders[chat_id]:
             orders_ref = active_orders[chat_id][msg_id]
+
+        # Tentukan country_key dari orders
+        country_key = "vietnam"
+        if orders_ref and orders_ref[0].get('country_key'):
+            country_key = orders_ref[0]['country_key']
 
         for t_id in ids_list:
             try:
@@ -470,8 +549,9 @@ def callback_q(call):
         bot.answer_callback_query(call.id, f"🚫 {cancelled} dibatalkan, {failed_cancel} gagal.", show_alert=True)
 
         try:
+            country_label = get_country_label(country_key)
             if orders_ref:
-                text = format_order_message(orders_ref, "🛒 *Order WA Vietnam — Selesai*")
+                text = format_order_message(orders_ref, f"🛒 *Order WA {country_label} — Selesai*", country_key)
                 bot.edit_message_text(text, chat_id, msg_id, parse_mode="Markdown")
             else:
                 result_text = f"🚫 *{cancelled} order dibatalkan.*\nSaldo dikembalikan."
