@@ -308,6 +308,12 @@ def start_cmd(message):
             InlineKeyboardButton("🇻🇳 Vietnam", callback_data="country_vietnam"),
             InlineKeyboardButton("🇨🇴 Colombia", callback_data="country_colombia")
         )
+    # Navigation bar
+    markup.row(
+        InlineKeyboardButton("🏠 Start", callback_data="nav_start"),
+        InlineKeyboardButton("🛒 Order", callback_data="nav_order"),
+        InlineKeyboardButton("💰 Saldo", callback_data="nav_balance")
+    )
     bot.send_message(message.chat.id, text, parse_mode="Markdown", reply_markup=markup)
 
 @bot.message_handler(commands=['help'])
@@ -320,7 +326,7 @@ def help_cmd(message):
         "2️⃣ Ketik `/start` lalu pilih negara:\n"
         "   🇻🇳 Vietnam — Country ID 10\n"
         "   🇨🇴 Colombia — Country ID 33\n\n"
-        "3️⃣ Pilih jumlah nomor yang ingin di-order (1, 5, atau 10)\n\n"
+        "3️⃣ Pilih jumlah nomor yang ingin di-order (1-5)\n\n"
         "4️⃣ Bot akan otomatis cek OTP setiap 5 detik.\n"
         "   Ketika OTP masuk, akan langsung muncul di bawah nomor.\n\n"
         "⏱ Timeout: 20 menit per order\n"
@@ -468,10 +474,12 @@ def callback_q(call):
         bot.answer_callback_query(call.id, f"Negara: {country_label}")
 
         markup = InlineKeyboardMarkup()
-        markup.row(InlineKeyboardButton("🛒 Order 1 Nomor", callback_data=f"quick_{country_key}_1"))
         markup.row(
-            InlineKeyboardButton("🛒 Order 5", callback_data=f"quick_{country_key}_5"),
-            InlineKeyboardButton("🛒 Order 10", callback_data=f"quick_{country_key}_10")
+            InlineKeyboardButton("1️⃣", callback_data=f"quick_{country_key}_1"),
+            InlineKeyboardButton("2️⃣", callback_data=f"quick_{country_key}_2"),
+            InlineKeyboardButton("3️⃣", callback_data=f"quick_{country_key}_3"),
+            InlineKeyboardButton("4️⃣", callback_data=f"quick_{country_key}_4"),
+            InlineKeyboardButton("5️⃣", callback_data=f"quick_{country_key}_5")
         )
         markup.row(InlineKeyboardButton("⬅️ Kembali", callback_data="back_to_country"))
 
@@ -511,6 +519,29 @@ def callback_q(call):
         country_label = get_country_label(country_key)
         bot.answer_callback_query(call.id, f"Memesan {count} nomor {country_label}...")
         process_bulk_order(call.message.chat.id, api_key, count, country_key)
+
+    # Navigation bar callbacks
+    elif data == "nav_start":
+        bot.answer_callback_query(call.id)
+        start_cmd(call.message)
+
+    elif data == "nav_order":
+        bot.answer_callback_query(call.id)
+        markup = InlineKeyboardMarkup()
+        markup.row(
+            InlineKeyboardButton("🇻🇳 Vietnam", callback_data="country_vietnam"),
+            InlineKeyboardButton("🇨🇴 Colombia", callback_data="country_colombia")
+        )
+        bot.send_message(call.message.chat.id, "🌍 *Pilih negara untuk order:*", parse_mode="Markdown", reply_markup=markup)
+
+    elif data == "nav_balance":
+        bot.answer_callback_query(call.id)
+        bal_res = req_api(api_key, 'getBalance')
+        if 'ACCESS_BALANCE' in bal_res:
+            bal = bal_res.split(':')[1]
+            bot.send_message(call.message.chat.id, f"💰 Saldo Anda: *{bal} RUB*", parse_mode="Markdown")
+        else:
+            bot.send_message(call.message.chat.id, f"❌ Gagal cek saldo: {bal_res}")
 
     elif data == "cancel_wait":
         bot.answer_callback_query(call.id, "⏳ Belum bisa cancel. Harus tunggu minimal 2 menit sejak order.", show_alert=True)
