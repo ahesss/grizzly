@@ -2,6 +2,7 @@ import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 import requests
 import sqlite3
+import json
 import os
 import threading
 import time
@@ -252,6 +253,8 @@ def format_order_message(orders, title="", country_key="vietnam"):
     for i, order in enumerate(orders, 1):
         number_local = strip_country_code(order['number'], country['country_code'])
         status = order.get('status', 'waiting')
+        price_str = f" [{order['price']} USD]" if order.get('price') else ""
+        number_local = f"{number_local}{price_str}"
 
         if status == 'waiting':
             elapsed = now - order.get('order_time', now)
@@ -646,6 +649,18 @@ def process_bulk_order(chat_id, api_key, count, country_key="vietnam"):
     """Proses order banyak nomor sekaligus"""
     country = COUNTRIES.get(country_key, COUNTRIES["vietnam"])
     country_label = get_country_label(country_key)
+    country_id_str = str(country['country_id'])
+
+    # Cek Harga terlebih dahulu
+    price_val = None
+    try:
+        res_price = req_api(api_key, 'getPrices', service=SERVICE, country=country_id_str)
+        if res_price.startswith("{"):
+            data = json.loads(res_price)
+            if country_id_str in data and SERVICE in data[country_id_str]:
+                price_val = data[country_id_str][SERVICE].get("cost", None)
+    except:
+        pass
 
     msg = bot.send_message(chat_id, f"⏳ Sedang memesan {count} nomor WA {country_label}...", parse_mode="Markdown")
 
@@ -666,7 +681,8 @@ def process_bulk_order(chat_id, api_key, count, country_key="vietnam"):
                     'status': 'waiting',
                     'code': None,
                     'order_time': time.time(),
-                    'country_key': country_key
+                    'country_key': country_key,
+                    'price': price_val
                 })
         elif res == 'NO_BALANCE':
             bot.edit_message_text(
