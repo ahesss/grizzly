@@ -651,20 +651,8 @@ def process_bulk_order(chat_id, api_key, count, country_key="vietnam"):
     country_label = get_country_label(country_key)
     country_id_str = str(country['country_id'])
 
-    # Cek Harga terlebih dahulu (opsional, jangan sampai menghambat order)
+    # Cek Harga dihapus sementara untuk debug error order
     price_val = None
-    try:
-        res_price = req_api(api_key, 'getPrices', service=SERVICE, country=country_id_str)
-        # Jika respon berupa JSON (dimulai dengan {)
-        if res_price and res_price.startswith("{"):
-            try:
-                data = json.loads(res_price)
-                if country_id_str in data and SERVICE in data[country_id_str]:
-                    price_val = data[country_id_str][SERVICE].get("cost")
-            except:
-                pass
-    except:
-        pass
 
     msg = bot.send_message(chat_id, f"⏳ Sedang memesan {count} nomor WA {country_label}...", parse_mode="Markdown")
 
@@ -686,7 +674,7 @@ def process_bulk_order(chat_id, api_key, count, country_key="vietnam"):
                     'code': None,
                     'order_time': time.time(),
                     'country_key': country_key,
-                    'price': price_val
+                    'price': None
                 })
         elif res == 'NO_BALANCE':
             bot.edit_message_text(
