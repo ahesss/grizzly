@@ -15,6 +15,9 @@ bot = telebot.TeleBot(TOKEN)
 API_BASE = "https://api.grizzlysms.com/stubs/handler_api.php"
 DB_PATH = os.environ.get("DB_PATH", "database.db")
 
+# ADMIN — hanya admin yang bisa add/remove user
+ADMIN_ID = 940475417
+
 MAX_ORDER = 20         # Maksimal order sekaligus
 OTP_TIMEOUT = 1200     # Timeout 20 menit (1200 detik)
 CHECK_INTERVAL = 5     # Cek OTP setiap 5 detik
@@ -53,8 +56,54 @@ def init_db():
         user_id INTEGER PRIMARY KEY,
         api_key TEXT
     )''')
+    c.execute('''CREATE TABLE IF NOT EXISTS whitelist (
+        user_id INTEGER PRIMARY KEY,
+        added_by INTEGER,
+        added_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )''')
+    # Pastikan admin selalu ada di whitelist
+    c.execute("INSERT OR IGNORE INTO whitelist (user_id, added_by) VALUES (?, ?)", (ADMIN_ID, ADMIN_ID))
     conn.commit()
     conn.close()
+
+# =============================================
+# WHITELIST / ACCESS CONTROL
+# =============================================
+def is_whitelisted(user_id):
+    """Cek apakah user ada di whitelist"""
+    if user_id == ADMIN_ID:
+        return True
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT user_id FROM whitelist WHERE user_id = ?", (user_id,))
+    res = c.fetchone()
+    conn.close()
+    return res is not None
+
+def add_to_whitelist(user_id, added_by):
+    """Tambahkan user ke whitelist"""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("INSERT OR IGNORE INTO whitelist (user_id, added_by) VALUES (?, ?)", (user_id, added_by))
+    conn.commit()
+    conn.close()
+
+def remove_from_whitelist(user_id):
+    """Hapus user dari whitelist"""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("DELETE FROM whitelist WHERE user_id = ?", (user_id,))
+    conn.commit()
+    conn.close()
+
+def get_all_whitelisted():
+    """Dapatkan semua user yang ada di whitelist"""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT user_id, added_at FROM whitelist")
+    res = c.fetchall()
+    conn.close()
+    return res
 
 def get_user_api(user_id):
     conn = sqlite3.connect(DB_PATH)
@@ -273,9 +322,75 @@ def auto_check_otp(chat_id, message_id, orders, api_key, country_key="vietnam"):
 # =============================================
 # COMMAND HANDLERS
 # =============================================
+
+# --- ADMIN COMMANDS (whitelist management) ---
+@bot.message_handler(commands=['adduser'])
+def adduser_cmd(message):
+    if message.from_user.id != ADMIN_ID:
+        bot.reply_to(message, "🚫 Hanya admin yang bisa menggunakan perintah ini.")
+        return
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2:
+        bot.reply_to(message, "❌ Format: `/adduser USER_ID`\n\nContoh: `/adduser 123456789`", parse_mode="Markdown")
+        return
+    try:
+        target_id = int(parts[1].strip())
+    except ValueError:
+        bot.reply_to(message, "❌ User ID harus berupa angka.")
+        return
+    add_to_whitelist(target_id, message.from_user.id)
+    bot.reply_to(message, f"✅ User `{target_id}` berhasil ditambahkan ke whitelist.", parse_mode="Markdown")
+
+@bot.message_handler(commands=['removeuser'])
+def removeuser_cmd(message):
+    if message.from_user.id != ADMIN_ID:
+        bot.reply_to(message, "🚫 Hanya admin yang bisa menggunakan perintah ini.")
+        return
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2:
+        bot.reply_to(message, "❌ Format: `/removeuser USER_ID`", parse_mode="Markdown")
+        return
+    try:
+        target_id = int(parts[1].strip())
+    except ValueError:
+        bot.reply_to(message, "❌ User ID harus berupa angka.")
+        return
+    if target_id == ADMIN_ID:
+        bot.reply_to(message, "⚠️ Tidak bisa menghapus admin dari whitelist.")
+        return
+    remove_from_whitelist(target_id)
+    bot.reply_to(message, f"✅ User `{target_id}` dihapus dari whitelist.", parse_mode="Markdown")
+
+@bot.message_handler(commands=['listusers'])
+def listusers_cmd(message):
+    if message.from_user.id != ADMIN_ID:
+        bot.reply_to(message, "🚫 Hanya admin yang bisa menggunakan perintah ini.")
+        return
+    users = get_all_whitelisted()
+    if not users:
+        bot.reply_to(message, "📋 Whitelist kosong.")
+        return
+    lines = ["📋 *Daftar Whitelist:*\n"]
+    for uid, added_at in users:
+        label = "👑 ADMIN" if uid == ADMIN_ID else "👤 User"
+        lines.append(f"{label}: `{uid}` (ditambahkan: {added_at})")
+    bot.reply_to(message, "\n".join(lines), parse_mode="Markdown")
+
+# --- USER COMMANDS (with whitelist check) ---
 @bot.message_handler(commands=['start'])
 def start_cmd(message):
     user_id = message.from_user.id
+
+    # Cek whitelist
+    if not is_whitelisted(user_id):
+        bot.send_message(message.chat.id,
+            "🔒 *Akses Ditolak*\n\n"
+            "Bot ini hanya bisa digunakan oleh user yang sudah diizinkan oleh admin.\n"
+            f"User ID Anda: `{user_id}`\n\n"
+            "Hubungi admin untuk mendapatkan akses.",
+            parse_mode="Markdown")
+        return
+
     api_key = get_user_api(user_id)
 
     text = (
@@ -313,6 +428,9 @@ def start_cmd(message):
 
 @bot.message_handler(commands=['help'])
 def help_cmd(message):
+    if not is_whitelisted(message.from_user.id):
+        bot.reply_to(message, "🔒 Anda tidak memiliki akses ke bot ini.")
+        return
     text = (
         "📖 *Panduan Penggunaan*\n\n"
         "1️⃣ Daftarkan API Key dari akun GrizzlySMS Anda:\n"
@@ -333,6 +451,9 @@ def help_cmd(message):
 
 @bot.message_handler(commands=['setapi'])
 def setapi_cmd(message):
+    if not is_whitelisted(message.from_user.id):
+        bot.reply_to(message, "🔒 Anda tidak memiliki akses ke bot ini.")
+        return
     parts = message.text.split(maxsplit=1)
     if len(parts) < 2:
         bot.reply_to(message, "❌ Format: `/setapi API_KEY_KAMU`\n\nDapatkan API Key di https://grizzlysms.com/docs", parse_mode="Markdown")
@@ -351,6 +472,9 @@ def setapi_cmd(message):
 
 @bot.message_handler(commands=['balance'])
 def balance_cmd(message):
+    if not is_whitelisted(message.from_user.id):
+        bot.reply_to(message, "🔒 Anda tidak memiliki akses ke bot ini.")
+        return
     api_key = get_user_api(message.from_user.id)
     if not api_key:
         bot.reply_to(message, "❌ Belum ada API Key. Gunakan `/setapi API_KEY`", parse_mode="Markdown")
@@ -365,6 +489,9 @@ def balance_cmd(message):
 
 @bot.message_handler(commands=['order'])
 def order_cmd(message):
+    if not is_whitelisted(message.from_user.id):
+        bot.reply_to(message, "🔒 Anda tidak memiliki akses ke bot ini.")
+        return
     api_key = get_user_api(message.from_user.id)
     if not api_key:
         bot.reply_to(message, "❌ Belum ada API Key. Gunakan `/setapi API_KEY`", parse_mode="Markdown")
@@ -451,6 +578,12 @@ def process_bulk_order(chat_id, api_key, count, country_key="vietnam"):
 @bot.callback_query_handler(func=lambda call: True)
 def callback_q(call):
     user_id = call.from_user.id
+
+    # Cek whitelist untuk callback juga
+    if not is_whitelisted(user_id):
+        bot.answer_callback_query(call.id, "🔒 Anda tidak memiliki akses ke bot ini.", show_alert=True)
+        return
+
     api_key = get_user_api(user_id)
     data = call.data
 
@@ -575,9 +708,22 @@ def callback_q(call):
             pass
 
 # =============================================
+# CATCH-ALL: pesan dari user tidak dikenal
+# =============================================
+@bot.message_handler(func=lambda message: True)
+def catch_all(message):
+    if not is_whitelisted(message.from_user.id):
+        bot.reply_to(message,
+            f"🔒 *Akses Ditolak*\n\n"
+            f"Bot ini terkunci. Hanya user yang diizinkan oleh admin yang bisa menggunakan bot ini.\n"
+            f"User ID Anda: `{message.from_user.id}`",
+            parse_mode="Markdown")
+
+# =============================================
 # MAIN
 # =============================================
 if __name__ == '__main__':
     init_db()
-    print("GrizzlySMS Bot is running...")
+    print("GrizzlySMS Bot is running... (LOCKED MODE)")
+    print(f"Admin ID: {ADMIN_ID}")
     bot.infinity_polling()
