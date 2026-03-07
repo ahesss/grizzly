@@ -659,10 +659,26 @@ def process_bulk_order(chat_id, api_key, count, country_key="vietnam"):
         r_p = requests.get(API_BASE, params=params, timeout=5)
         res_price = r_p.text.strip()
         
-        if res_price.startswith("{"):
-            data = json.loads(res_price)
-            if country_id_str in data and SERVICE in data[country_id_str]:
-                price_val = data[country_id_str][SERVICE].get("cost")
+        if res_price and res_price.startswith("{"):
+            try:
+                data = json.loads(res_price)
+                # Coba cari harga dengan berbagai format JSON (Country/Service atau Service/Country)
+                inner = None
+                if country_id_str in data and SERVICE in data[country_id_str]:
+                    inner = data[country_id_str][SERVICE]
+                elif SERVICE in data and country_id_str in data[SERVICE]:
+                    inner = data[SERVICE][country_id_str]
+                
+                if inner and isinstance(inner, dict):
+                    if "cost" in inner:
+                        price_val = inner["cost"]
+                    else:
+                        # Jika formatnya {"0.18": 10, "0.20": 5}, ambil yang termurah
+                        numeric_keys = [float(k) for k in inner.keys() if k.replace('.', '', 1).isdigit()]
+                        if numeric_keys:
+                            price_val = min(numeric_keys)
+            except:
+                pass
     except:
         pass
 
