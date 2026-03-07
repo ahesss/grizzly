@@ -253,27 +253,27 @@ def format_order_message(orders, title="", country_key="vietnam"):
     for i, order in enumerate(orders, 1):
         number_local = strip_country_code(order['number'], country['country_code'])
         status = order.get('status', 'waiting')
-        price_str = f" [{order['price']} USD]" if order.get('price') else ""
-        number_local = f"{number_local}{price_str}"
+        # Format harga: [💰 0.203 USD]
+        price_str = f" [💰 {order['price']} USD]" if order.get('price') else ""
 
         if status == 'waiting':
             elapsed = now - order.get('order_time', now)
             remaining = max(0, OTP_TIMEOUT - elapsed)
             mins = int(remaining // 60)
             secs = int(remaining % 60)
-            lines.append(f"{i}. `{number_local}` — ⏳ Menunggu OTP... ({mins}m {secs}s)")
+            lines.append(f"{i}. `{number_local}`{price_str} — ⏳ Menunggu OTP... ({mins}m {secs}s)")
         elif status == 'got_otp':
             code = order.get('code', '???')
-            lines.append(f"{i}. `{number_local}` — ✅ OTP: `{code}`")
+            lines.append(f"{i}. `{number_local}`{price_str} — ✅ OTP: `{code}`")
             done_count += 1
         elif status == 'cancelled':
-            lines.append(f"{i}. `{number_local}` — 🚫 Dibatalkan (Refund)")
+            lines.append(f"{i}. `{number_local}`{price_str} — 🚫 Dibatalkan (Refund)")
             done_count += 1
         elif status == 'timeout':
-            lines.append(f"{i}. `{number_local}` — ⏰ Timeout (20 menit)")
+            lines.append(f"{i}. `{number_local}`{price_str} — ⏰ Timeout (20 menit)")
             done_count += 1
         elif status == 'error':
-            lines.append(f"{i}. `{number_local}` — ❌ Error")
+            lines.append(f"{i}. `{number_local}`{price_str} — ❌ Error")
             done_count += 1
 
     lines.append("")
@@ -651,14 +651,18 @@ def process_bulk_order(chat_id, api_key, count, country_key="vietnam"):
     country_label = get_country_label(country_key)
     country_id_str = str(country['country_id'])
 
-    # Cek Harga terlebih dahulu
+    # Cek Harga terlebih dahulu (opsional, jangan sampai menghambat order)
     price_val = None
     try:
         res_price = req_api(api_key, 'getPrices', service=SERVICE, country=country_id_str)
-        if res_price.startswith("{"):
-            data = json.loads(res_price)
-            if country_id_str in data and SERVICE in data[country_id_str]:
-                price_val = data[country_id_str][SERVICE].get("cost", None)
+        # Jika respon berupa JSON (dimulai dengan {)
+        if res_price and res_price.startswith("{"):
+            try:
+                data = json.loads(res_price)
+                if country_id_str in data and SERVICE in data[country_id_str]:
+                    price_val = data[country_id_str][SERVICE].get("cost")
+            except:
+                pass
     except:
         pass
 
