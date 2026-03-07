@@ -542,7 +542,7 @@ def start_cmd(message):
         bal_res = req_api(api_key, 'getBalance')
         if 'ACCESS_BALANCE' in bal_res:
             bal = bal_res.split(':')[1]
-            text += f"✅ API Key: Terdaftar\n💰 Saldo: *{bal} RUB*"
+            text += f"✅ API Key: Terdaftar\n💰 Saldo: *{bal} USD*"
         else:
             text += "⚠️ API Key terdaftar tapi tidak valid.\nGunakan `/setapi API_KEY` untuk mengganti."
     else:
@@ -599,7 +599,7 @@ def setapi_cmd(message):
     if 'ACCESS_BALANCE' in bal_res:
         bal = bal_res.split(':')[1]
         set_user_api(message.from_user.id, api_key)
-        bot.send_message(message.chat.id, f"✅ API Key valid & tersimpan!\n💰 Saldo: *{bal} RUB*\n\nKetik `/start` untuk pilih negara dan mulai order.", parse_mode="Markdown")
+        bot.send_message(message.chat.id, f"✅ API Key valid & tersimpan!\n💰 Saldo: *{bal} USD*\n\nKetik `/start` untuk pilih negara dan mulai order.", parse_mode="Markdown")
     else:
         bot.send_message(message.chat.id, "❌ API Key tidak valid atau server gangguan.")
 
@@ -618,7 +618,7 @@ def balance_cmd(message):
     bal_res = req_api(api_key, 'getBalance')
     if 'ACCESS_BALANCE' in bal_res:
         bal = bal_res.split(':')[1]
-        bot.reply_to(message, f"💰 Saldo Anda: *{bal} RUB*", parse_mode="Markdown")
+        bot.reply_to(message, f"💰 Saldo Anda: *{bal} USD*", parse_mode="Markdown")
     else:
         bot.reply_to(message, f"❌ Gagal cek saldo: {bal_res}")
 
@@ -791,7 +791,7 @@ def callback_q(call):
         bal_res = req_api(api_key, 'getBalance')
         if 'ACCESS_BALANCE' in bal_res:
             bal = bal_res.split(':')[1]
-            bot.send_message(call.message.chat.id, f"💰 Saldo Anda: *{bal} RUB*", parse_mode="Markdown")
+            bot.send_message(call.message.chat.id, f"💰 Saldo Anda: *{bal} USD*", parse_mode="Markdown")
         else:
             bot.send_message(call.message.chat.id, f"❌ Gagal cek saldo: {bal_res}")
 
