@@ -651,8 +651,24 @@ def process_bulk_order(chat_id, api_key, count, country_key="vietnam"):
     country_label = get_country_label(country_key)
     country_id_str = str(country['country_id'])
 
-    # Cek Harga dihapus sementara untuk debug error order
+    # Cek Harga dengan cara aman (timeout ketat agar tidak ganggu order)
     price_val = None
+    try:
+        # Panggil API dengan timeout lebih pendek khusus harga
+        params = {'api_key': api_key, 'action': 'getPrices', 'service': SERVICE, 'country': country_id_str}
+        r_p = requests.get(API_BASE, params=params, timeout=5)
+        res_price = r_p.text.strip()
+        
+        if res_price.startswith("{"):
+            data = json.loads(res_price)
+            if country_id_str in data and SERVICE in data[country_id_str]:
+                price_val = data[country_id_str][SERVICE].get("cost")
+    except:
+        pass
+
+    # Beri jeda sangat singkat agar API tidak overload sebelum order
+    if price_val:
+        time.sleep(0.5)
 
     msg = bot.send_message(chat_id, f"⏳ Sedang memesan {count} nomor WA {country_label}...", parse_mode="Markdown")
 
@@ -674,7 +690,7 @@ def process_bulk_order(chat_id, api_key, count, country_key="vietnam"):
                     'code': None,
                     'order_time': time.time(),
                     'country_key': country_key,
-                    'price': None
+                    'price': price_val
                 })
         elif res == 'NO_BALANCE':
             bot.edit_message_text(
