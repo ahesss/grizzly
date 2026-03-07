@@ -61,6 +61,20 @@ def init_db():
         added_by INTEGER,
         added_at TEXT DEFAULT CURRENT_TIMESTAMP
     )''')
+    c.execute('''CREATE TABLE IF NOT EXISTS user_info (
+        user_id INTEGER PRIMARY KEY,
+        first_name TEXT,
+        last_name TEXT,
+        username TEXT,
+        last_seen TEXT DEFAULT CURRENT_TIMESTAMP
+    )''')
+    c.execute('''CREATE TABLE IF NOT EXISTS activity_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        action TEXT,
+        detail TEXT,
+        timestamp TEXT DEFAULT CURRENT_TIMESTAMP
+    )''')
     # Pastikan admin selalu ada di whitelist
     c.execute("INSERT OR IGNORE INTO whitelist (user_id, added_by) VALUES (?, ?)", (ADMIN_ID, ADMIN_ID))
     conn.commit()
@@ -104,6 +118,80 @@ def get_all_whitelisted():
     res = c.fetchall()
     conn.close()
     return res
+
+# =============================================
+# USER INFO & ACTIVITY LOGGING
+# =============================================
+def update_user_info(user):
+    """Simpan/update info user (nama, username)"""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""INSERT OR REPLACE INTO user_info (user_id, first_name, last_name, username, last_seen)
+                 VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)""",
+              (user.id, user.first_name, user.last_name or '', user.username or ''))
+    conn.commit()
+    conn.close()
+
+def get_user_info(user_id):
+    """Dapatkan info user dari DB"""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT first_name, last_name, username, last_seen FROM user_info WHERE user_id = ?", (user_id,))
+    res = c.fetchone()
+    conn.close()
+    return res
+
+def log_activity(user_id, action, detail=""):
+    """Catat aktivitas user"""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("INSERT INTO activity_log (user_id, action, detail) VALUES (?, ?, ?)",
+              (user_id, action, detail))
+    conn.commit()
+    conn.close()
+
+def get_active_users():
+    """Dapatkan user yang terakhir aktif beserta info-nya"""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""SELECT a.user_id, u.first_name, u.last_name, u.username, 
+                        a.action, a.detail, a.timestamp
+                 FROM activity_log a
+                 LEFT JOIN user_info u ON a.user_id = u.user_id
+                 WHERE a.id IN (
+                     SELECT MAX(id) FROM activity_log GROUP BY user_id
+                 )
+                 ORDER BY a.timestamp DESC
+                 LIMIT 20""")
+    res = c.fetchall()
+    conn.close()
+    return res
+
+def get_user_stats():
+    """Dapatkan statistik penggunaan per user"""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""SELECT a.user_id, u.first_name, u.last_name, u.username,
+                        COUNT(*) as total_actions,
+                        SUM(CASE WHEN a.action = 'order' THEN 1 ELSE 0 END) as total_orders,
+                        SUM(CASE WHEN a.action = 'balance' THEN 1 ELSE 0 END) as total_balance,
+                        MAX(a.timestamp) as last_active
+                 FROM activity_log a
+                 LEFT JOIN user_info u ON a.user_id = u.user_id
+                 GROUP BY a.user_id
+                 ORDER BY last_active DESC""")
+    res = c.fetchall()
+    conn.close()
+    return res
+
+def format_user_label(user_id, first_name, last_name, username):
+    """Format label user dengan nama dan username"""
+    name = first_name or "Unknown"
+    if last_name:
+        name += f" {last_name}"
+    if username:
+        name += f" (@{username})"
+    return name
 
 def get_user_api(user_id):
     conn = sqlite3.connect(DB_PATH)
@@ -372,8 +460,51 @@ def listusers_cmd(message):
         return
     lines = ["📋 *Daftar Whitelist:*\n"]
     for uid, added_at in users:
-        label = "👑 ADMIN" if uid == ADMIN_ID else "👤 User"
-        lines.append(f"{label}: `{uid}` (ditambahkan: {added_at})")
+        info = get_user_info(uid)
+        if info:
+            name = format_user_label(uid, info[0], info[1], info[2])
+        else:
+            name = str(uid)
+        role = "👑 ADMIN" if uid == ADMIN_ID else "👤 User"
+        lines.append(f"{role}: {name}\n   ID: `{uid}` | Ditambahkan: {added_at}")
+    bot.reply_to(message, "\n".join(lines), parse_mode="Markdown")
+
+@bot.message_handler(commands=['activeusers'])
+def activeusers_cmd(message):
+    if message.from_user.id != ADMIN_ID:
+        bot.reply_to(message, "🚫 Hanya admin yang bisa menggunakan perintah ini.")
+        return
+    active = get_active_users()
+    if not active:
+        bot.reply_to(message, "📊 Belum ada aktivitas user.")
+        return
+    lines = ["📊 *User Aktif Terakhir:*\n"]
+    for i, (uid, fname, lname, uname, action, detail, ts) in enumerate(active, 1):
+        name = format_user_label(uid, fname, lname, uname)
+        action_text = action
+        if detail:
+            action_text += f" ({detail})"
+        lines.append(f"{i}. {name}\n   🔹 `{action_text}` — {ts}")
+    bot.reply_to(message, "\n".join(lines), parse_mode="Markdown")
+
+@bot.message_handler(commands=['stats'])
+def stats_cmd(message):
+    if message.from_user.id != ADMIN_ID:
+        bot.reply_to(message, "🚫 Hanya admin yang bisa menggunakan perintah ini.")
+        return
+    stats = get_user_stats()
+    if not stats:
+        bot.reply_to(message, "📈 Belum ada statistik.")
+        return
+    lines = ["📈 *Statistik Penggunaan Bot:*\n"]
+    for uid, fname, lname, uname, total, orders, balance, last_active in stats:
+        name = format_user_label(uid, fname, lname, uname)
+        lines.append(
+            f"👤 {name}\n"
+            f"   ID: `{uid}`\n"
+            f"   📦 Order: {orders}x | 💰 Cek saldo: {balance}x | 📊 Total: {total}x\n"
+            f"   ⏰ Terakhir aktif: {last_active}\n"
+        )
     bot.reply_to(message, "\n".join(lines), parse_mode="Markdown")
 
 # --- USER COMMANDS (with whitelist check) ---
@@ -389,6 +520,8 @@ def start_cmd(message):
             parse_mode="Markdown")
         return
 
+    update_user_info(message.from_user)
+    log_activity(user_id, "start")
     api_key = get_user_api(user_id)
 
     text = (
@@ -452,6 +585,8 @@ def setapi_cmd(message):
     if not is_whitelisted(message.from_user.id):
         bot.reply_to(message, "🔒 Maaf, Anda tidak bisa mengakses bot ini.\nHub orang ganteng: @hesssxb")
         return
+    update_user_info(message.from_user)
+    log_activity(message.from_user.id, "setapi")
     parts = message.text.split(maxsplit=1)
     if len(parts) < 2:
         bot.reply_to(message, "❌ Format: `/setapi API_KEY_KAMU`\n\nDapatkan API Key di https://grizzlysms.com/docs", parse_mode="Markdown")
@@ -473,6 +608,8 @@ def balance_cmd(message):
     if not is_whitelisted(message.from_user.id):
         bot.reply_to(message, "🔒 Maaf, Anda tidak bisa mengakses bot ini.\nHub orang ganteng: @hesssxb")
         return
+    update_user_info(message.from_user)
+    log_activity(message.from_user.id, "balance")
     api_key = get_user_api(message.from_user.id)
     if not api_key:
         bot.reply_to(message, "❌ Belum ada API Key. Gunakan `/setapi API_KEY`", parse_mode="Markdown")
@@ -490,6 +627,8 @@ def order_cmd(message):
     if not is_whitelisted(message.from_user.id):
         bot.reply_to(message, "🔒 Maaf, Anda tidak bisa mengakses bot ini.\nHub orang ganteng: @hesssxb")
         return
+    update_user_info(message.from_user)
+    log_activity(message.from_user.id, "order")
     api_key = get_user_api(message.from_user.id)
     if not api_key:
         bot.reply_to(message, "❌ Belum ada API Key. Gunakan `/setapi API_KEY`", parse_mode="Markdown")
