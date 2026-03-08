@@ -282,19 +282,21 @@ def format_order_message(orders, title="", country_key="vietnam"):
             remaining = max(0, OTP_TIMEOUT - elapsed)
             mins = int(remaining // 60)
             secs = int(remaining % 60)
-            lines.append(f"{i}. `{number_local}`{price_str} — ⏳ Menunggu OTP... ({mins}m {secs}s)")
+            # Minimalist: i. Nomor ⏳ 05:20
+            lines.append(f"{i}. `{number_local}` ⏳ *{mins:02d}:{secs:02d}*{price_str}")
         elif status == 'got_otp':
             code = order.get('code', '???')
-            lines.append(f"{i}. `{number_local}`{price_str} — ✅ OTP: `{code}`")
+            # Minimalist: i. Nomor ✅ 123456
+            lines.append(f"{i}. `{number_local}` ✅ `{code}`{price_str}")
             done_count += 1
         elif status == 'cancelled':
-            lines.append(f"{i}. `{number_local}`{price_str} — 🚫 Dibatalkan (Refund)")
+            lines.append(f"{i}. `{number_local}` 🚫 *Dibatalkan*")
             done_count += 1
         elif status == 'timeout':
-            lines.append(f"{i}. `{number_local}`{price_str} — ⏰ Timeout (20 menit)")
+            lines.append(f"{i}. `{number_local}` ⏰ *Exp*")
             done_count += 1
         elif status == 'error':
-            lines.append(f"{i}. `{number_local}`{price_str} — ❌ Error")
+            lines.append(f"{i}. `{number_local}` ❌ *Error*")
             done_count += 1
 
     lines.append("")
