@@ -998,12 +998,16 @@ def autobuy_worker(chat_id, api_key):
         elif res == 'NO_NUMBERS':
             # Brutal mode: very short sleep to hammer the API
             time.sleep(0.1)
-        elif res.startswith('ERROR') or 'BAD_KEY' in res or 'BANNED' in res:
+        elif 'BAD_KEY' in res or 'BANNED' in res:
             try:
-                bot.send_message(chat_id, f"⚠️ *AUTO BUY ERROR*\nAPI mengembalikan: `{res}`\nDihentikan.", parse_mode="Markdown")
+                bot.send_message(chat_id, f"⚠️ *AUTO BUY BERHENTI*\nAkun API Anda bermasalah: `{res}`", parse_mode="Markdown")
             except: pass
             autobuy_active[chat_id] = False
             break
+        elif res.startswith('ERROR'):
+            # This is usually a network read timeout from our req_api wrapper.
+            # In brutal war mode, we don't care, we just give it a tiny break and retry.
+            time.sleep(0.5)
         else:
             time.sleep(0.5)
 
