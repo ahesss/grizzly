@@ -259,7 +259,7 @@ def get_country_label(country_key):
 # =============================================
 # FORMAT PESAN ORDER
 # =============================================
-def format_order_message(orders, title="", country_key="vietnam"):
+def format_order_message(orders, title="", country_key="vietnam", start_index=1, show_progress=True):
     """Format pesan daftar order dengan status OTP"""
     country = COUNTRIES.get(country_key, COUNTRIES["vietnam"])
     lines = []
@@ -271,7 +271,7 @@ def format_order_message(orders, title="", country_key="vietnam"):
     total = len(orders)
     now = time.time()
 
-    for i, order in enumerate(orders, 1):
+    for i, order in enumerate(orders, start_index):
         number_local = strip_country_code(order['number'], country['country_code'])
         status = order.get('status', 'waiting')
         # Format harga: [💰 0.203 USD]
@@ -299,11 +299,11 @@ def format_order_message(orders, title="", country_key="vietnam"):
             lines.append(f"{i}. `{number_local}` ❌ *Error*")
             done_count += 1
 
-    lines.append("")
-    lines.append(f"📊 Progress: {done_count}/{total}")
-
-    if done_count >= total:
-        lines.append("\n✅ *Semua order selesai!*")
+    if show_progress:
+        lines.append("")
+        lines.append(f"📊 Progress: {done_count}/{total}")
+        if done_count >= total:
+            lines.append("\n✅ *Semua order selesai!*")
 
     return "\n".join(lines)
 
@@ -328,14 +328,13 @@ def safe_edit_message(text, chat_id, message_id, markup=None):
 # =============================================
 # AUTO-CHECK OTP (BACKGROUND THREAD)
 # =============================================
-def auto_check_otp(chat_id, message_id, orders, api_key, country_key="vietnam", is_autobuy_mode=False):
+def auto_check_otp(chat_id, message_id, orders, api_key, country_key="vietnam", is_autobuy_mode=False, s_idx=1):
     """Background thread yang otomatis cek OTP untuk semua order"""
     country = COUNTRIES.get(country_key, COUNTRIES["vietnam"])
     country_label = get_country_label(country_key)
     start_time = time.time()
     last_edit_time = 0
     EDIT_COOLDOWN = 3
-    TIMER_UPDATE = 15
     last_timer_update = 0
 
     try:
@@ -348,7 +347,7 @@ def auto_check_otp(chat_id, message_id, orders, api_key, country_key="vietnam", 
                     continue
                 else:
                     text_title = "🎯 *TARGET DIDAPATKAN (AUTO BUY)*" if is_autobuy_mode else f"🛒 *Order WA {country_label} — Selesai*"
-                    text = format_order_message(orders, text_title, country_key)
+                    text = format_order_message(orders, text_title, country_key, start_index=s_idx, show_progress=(not is_autobuy_mode))
                     safe_edit_message(text, chat_id, message_id)
                     break
 
@@ -394,7 +393,7 @@ def auto_check_otp(chat_id, message_id, orders, api_key, country_key="vietnam", 
             if should_update and (now - last_edit_time >= EDIT_COOLDOWN):
                 remaining = [o for o in orders if o['status'] == 'waiting']
                 text_title = "🎯 *TARGET DIDAPATKAN (AUTO BUY)*" if is_autobuy_mode else f"🛒 *Order WA {country_label}*"
-                text = format_order_message(orders, text_title, country_key)
+                text = format_order_message(orders, text_title, country_key, start_index=s_idx, show_progress=(not is_autobuy_mode))
 
                 if remaining:
                     markup = InlineKeyboardMarkup()
@@ -1072,9 +1071,9 @@ def autobuy_worker(chat_id, api_key):
                 orders_list.append(order)
                 single_order_list = [order]
                 
-                # Tambahkan nomor urut ke judul (1., 2., 3., dst)
-                custom_title = f"{order_counter}. 🎯 *TARGET DIDAPATKAN (AUTO BUY)*"
-                text = format_order_message(single_order_list, custom_title, country_key)
+                # Gunakan start_index=order_counter agar nomornya 1., 2., 3...
+                # show_progress=False agar tidak muncul "Progress 0/1" yang memenuhi layar
+                text = format_order_message(single_order_list, "🎯 *TARGET DIDAPATKAN (AUTO BUY)*", country_key, start_index=order_counter, show_progress=False)
                 
                 markup = InlineKeyboardMarkup()
                 markup.row(InlineKeyboardButton(f"⏳ Cancel tersedia ~2 menit lagi", callback_data="cancel_wait"))
@@ -1088,8 +1087,8 @@ def autobuy_worker(chat_id, api_key):
                         active_orders[chat_id] = {}
                     active_orders[chat_id][msg.message_id] = single_order_list
                     
-                    # Jalankan monitoring OTP khusus untuk pesan ini saja
-                    threading.Thread(target=auto_check_otp, args=(chat_id, msg.message_id, single_order_list, api_key, country_key, True)).start()
+                    # Jalankan monitoring OTP khusus untuk pesan ini saja (Pass s_idx untuk numbering yg bener)
+                    threading.Thread(target=auto_check_otp, args=(chat_id, msg.message_id, single_order_list, api_key, country_key, True, order_counter)).start()
                 except:
                     pass
                 
