@@ -25,6 +25,11 @@ CHECK_INTERVAL = 5     # Cek OTP setiap 5 detik
 CANCEL_DELAY = 120     # Baru bisa cancel setelah 2 menit (120 detik)
 SERVICE = "wa"         # WhatsApp service
 
+# ENV BASED PERMANENT WHITELIST
+# Format: "1234567,9876543,11223344"
+env_whitelist = os.environ.get("WHITELIST_IDS", "")
+PERMANENT_WHITELIST = [int(x.strip()) for x in env_whitelist.split(",") if x.strip().isdigit()]
+
 # =============================================
 # KONFIGURASI NEGARA
 # =============================================
@@ -86,7 +91,7 @@ def init_db():
 # =============================================
 def is_whitelisted(user_id):
     """Cek apakah user ada di whitelist"""
-    if user_id == ADMIN_ID:
+    if user_id == ADMIN_ID or user_id in PERMANENT_WHITELIST:
         return True
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
