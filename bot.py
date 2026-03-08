@@ -318,7 +318,7 @@ def safe_edit_message(text, chat_id, message_id, markup=None):
         if "retry after" in err_str or "too many requests" in err_str:
             time.sleep(5)
         elif "message is not modified" in err_str:
-            pass
+            return True
         else:
             print(f"Edit message error: {e}")
         return False
@@ -1068,8 +1068,19 @@ def autobuy_worker(chat_id, api_key):
                 # PUSH TO OVERLAY LIST
                 orders_list.append(order)
                 text = format_order_message(orders_list, "🎯 *TARGET DIDAPATKAN (AUTO BUY)*", country_key)
+                
                 markup = InlineKeyboardMarkup()
-                markup.row(InlineKeyboardButton("⏳ Cancel tersedia ~2 menit lagi", callback_data="cancel_wait"))
+                remaining = [o for o in orders_list if o['status'] == 'waiting']
+                if remaining:
+                    oldest_order_time = min(o.get('order_time', time.time()) for o in remaining)
+                    can_cancel = (time.time() - oldest_order_time) >= CANCEL_DELAY
+                    if can_cancel:
+                        ids_str = ",".join([o['id'] for o in remaining])
+                        if ids_str:
+                            markup.row(InlineKeyboardButton(f"🚫 Batalkan Sisa ({len(remaining)})", callback_data=f"cancelall_{ids_str}"))
+                    else:
+                        wait_mins = int((CANCEL_DELAY - (time.time() - oldest_order_time)) / 60) + 1
+                        markup.row(InlineKeyboardButton(f"⏳ Cancel tersedia ~{wait_mins} menit lagi", callback_data="cancel_wait"))
                 
                 try:
                     if not consolidated_msg_id:
