@@ -346,7 +346,7 @@ def auto_check_otp(chat_id, message_id, orders, api_key, country_key="vietnam", 
                     time.sleep(CHECK_INTERVAL)
                     continue
                 else:
-                    text_title = "🎯 *TARGET DIDAPATKAN (AUTO BUY)*" if is_autobuy_mode else f"🛒 *Order WA {country_label} — Selesai*"
+                    text_title = "" if is_autobuy_mode else f"🛒 *Order WA {country_label} — Selesai*"
                     text = format_order_message(orders, text_title, country_key, start_index=s_idx, show_progress=(not is_autobuy_mode))
                     safe_edit_message(text, chat_id, message_id)
                     break
@@ -392,7 +392,7 @@ def auto_check_otp(chat_id, message_id, orders, api_key, country_key="vietnam", 
 
             if should_update and (now - last_edit_time >= EDIT_COOLDOWN):
                 remaining = [o for o in orders if o['status'] == 'waiting']
-                text_title = "🎯 *TARGET DIDAPATKAN (AUTO BUY)*" if is_autobuy_mode else f"🛒 *Order WA {country_label}*"
+                text_title = "" if is_autobuy_mode else f"🛒 *Order WA {country_label}*"
                 text = format_order_message(orders, text_title, country_key, start_index=s_idx, show_progress=(not is_autobuy_mode))
 
                 if remaining:
@@ -1073,7 +1073,8 @@ def autobuy_worker(chat_id, api_key):
                 
                 # Gunakan start_index=order_counter agar nomornya 1., 2., 3...
                 # show_progress=False agar tidak muncul "Progress 0/1" yang memenuhi layar
-                text = format_order_message(single_order_list, "🎯 *TARGET DIDAPATKAN (AUTO BUY)*", country_key, start_index=order_counter, show_progress=False)
+                # Judul dikosongkan agar tampilan lebih ramping
+                text = format_order_message(single_order_list, "", country_key, start_index=order_counter, show_progress=False)
                 
                 markup = InlineKeyboardMarkup()
                 markup.row(InlineKeyboardButton(f"⏳ Cancel tersedia ~2 menit lagi", callback_data="cancel_wait"))
