@@ -538,6 +538,8 @@ def start_cmd(message):
         "`/setapi API_KEY` — Daftarkan API Key GrizzlySMS\n"
         "`/order N` — Order N nomor (pilih negara dulu)\n"
         "`/balance` — Cek saldo\n"
+        "`/autobuy` — Auto buy WA Vietnam sampai saldo habis\n"
+        "`/stopauto` — Hentikan auto buy\n"
         "`/help` — Bantuan\n\n"
     )
 
@@ -883,6 +885,119 @@ def callback_q(call):
                 bot.edit_message_text(result_text, chat_id, msg_id, parse_mode="Markdown")
         except:
             pass
+
+# =============================================
+# AUTO-BUY (BRUTAL MODE)
+# =============================================
+autobuy_active = {}
+
+def autobuy_worker(chat_id, api_key):
+    bot.send_message(chat_id, "🔥 *AUTO BUY VIETNAM AKTIF (BRUTAL MODE)*\n\nMencari nomor nonstop sampai saldo habis...\nKetik /stopauto untuk berhenti.", parse_mode="Markdown")
+    
+    country_key = "vietnam"
+    country = COUNTRIES[country_key]
+    
+    while autobuy_active.get(chat_id, False):
+        res = req_api(api_key, 'getNumber', service=SERVICE, country=country['country_id'])
+        
+        if 'ACCESS_NUMBER' in res:
+            parts = res.split(':')
+            if len(parts) >= 3:
+                t_id = parts[1]
+                number = parts[2]
+                
+                # Fetch price for display
+                price_val = None
+                try:
+                    params = {'api_key': api_key, 'action': 'getPrices', 'service': SERVICE, 'country': str(country['country_id'])}
+                    r_p = requests.get(API_BASE, params=params, timeout=3)
+                    p_data = json.loads(r_p.text.strip())
+                    inner = None
+                    c_id_str = str(country['country_id'])
+                    if c_id_str in p_data and SERVICE in p_data[c_id_str]:
+                        inner = p_data[c_id_str][SERVICE]
+                    elif SERVICE in p_data and c_id_str in p_data[SERVICE]:
+                        inner = p_data[SERVICE][c_id_str]
+                    
+                    if inner and isinstance(inner, dict):
+                        if "cost" in inner:
+                            price_val = inner["cost"]
+                        else:
+                            numeric_keys = [float(k) for k in inner.keys() if k.replace('.', '', 1).isdigit()]
+                            if numeric_keys: price_val = min(numeric_keys)
+                except: pass
+
+                order = {
+                    'id': t_id,
+                    'number': number,
+                    'status': 'waiting',
+                    'code': None,
+                    'order_time': time.time(),
+                    'country_key': country_key,
+                    'price': price_val
+                }
+                
+                # Notify and start checking
+                text = format_order_message([order], "🎯 *TARGET DIDAPATKAN (AUTO BUY)*", country_key)
+                markup = InlineKeyboardMarkup()
+                markup.row(InlineKeyboardButton("⏳ Cancel tersedia ~2 menit lagi", callback_data="cancel_wait"))
+                
+                try:
+                    msg = bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=markup)
+                    if chat_id not in active_orders:
+                        active_orders[chat_id] = {}
+                    active_orders[chat_id][msg.message_id] = [order]
+                    threading.Thread(target=auto_check_otp, args=(chat_id, msg.message_id, [order], api_key, country_key), daemon=True).start()
+                except Exception as e:
+                    print("Error sending autobuy message:", e)
+                
+                time.sleep(0.5) # small pause after success to prevent telegram rate limits
+                
+        elif res == 'NO_BALANCE':
+            try:
+                bot.send_message(chat_id, "❌ *AUTO BUY BERHENTI*\nSaldo Anda habis!", parse_mode="Markdown")
+            except: pass
+            autobuy_active[chat_id] = False
+            break
+        elif res == 'NO_NUMBERS':
+            # Brutal mode: very short sleep to hammer the API
+            time.sleep(0.1)
+        elif res.startswith('ERROR') or 'BAD_KEY' in res or 'BANNED' in res:
+            try:
+                bot.send_message(chat_id, f"⚠️ *AUTO BUY ERROR*\nAPI mengembalikan: `{res}`\nDihentikan.", parse_mode="Markdown")
+            except: pass
+            autobuy_active[chat_id] = False
+            break
+        else:
+            time.sleep(0.5)
+
+@bot.message_handler(commands=['autobuy'])
+def autobuy_cmd(message):
+    chat_id = message.chat.id
+    if not is_whitelisted(message.from_user.id):
+        bot.reply_to(message, "🔒 Maaf, Anda tidak bisa mengakses bot ini.\nHub orang ganteng: @hesssxb", parse_mode="Markdown")
+        return
+        
+    api_key = get_user_api(message.from_user.id)
+    if not api_key:
+        bot.reply_to(message, "❌ Belum ada API Key. Gunakan `/setapi API_KEY`", parse_mode="Markdown")
+        return
+        
+    if autobuy_active.get(chat_id, False):
+        bot.reply_to(message, "⚠️ Autobuy sudah berjalan! Ketik /stopauto untuk menghentikan.")
+        return
+        
+    autobuy_active[chat_id] = True
+    threading.Thread(target=autobuy_worker, args=(chat_id, api_key), daemon=True).start()
+
+@bot.message_handler(commands=['stopauto'])
+def stopauto_cmd(message):
+    chat_id = message.chat.id
+    if autobuy_active.get(chat_id, False):
+        autobuy_active[chat_id] = False
+        bot.reply_to(message, "🛑 Autobuy berhasil dihentikan.")
+    else:
+        bot.reply_to(message, "⚠️ Tidak ada autobuy yang sedang berjalan.")
 
 # =============================================
 # CATCH-ALL: pesan dari user tidak dikenal
