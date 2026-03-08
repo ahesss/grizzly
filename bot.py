@@ -30,6 +30,7 @@ OTP_TIMEOUT = 1200
 CHECK_INTERVAL = 3     
 CANCEL_DELAY = 120     
 SERVICE = "wa"         
+API_BASE = "https://api.grizzlysms.com/stubs/handler_api.php"
 
 # ENV BASED PERMANENT WHITELIST
 # Format: "1234567,9876543,11223344"
