@@ -928,12 +928,49 @@ def callback_q(call):
 autobuy_active = {}
 
 def autobuy_worker(chat_id, api_key):
-    bot.send_message(chat_id, "🔥 *AUTO BUY VIETNAM AKTIF (BRUTAL MODE)*\n\nMencari nomor nonstop sampai saldo habis...\nKetik /stopauto untuk berhenti.", parse_mode="Markdown")
-    
+    try:
+        status_msg = bot.send_message(
+            chat_id, 
+            "🔥 *AUTO BUY VIETNAM AKTIF (BRUTAL MODE)*\n\n"
+            "Mencari nomor nonstop sampai saldo habis...\n"
+            "Ketik /stopauto untuk berhenti.\n\n"
+            "⏳ *Status:* Memulai pencarian...", 
+            parse_mode="Markdown"
+        )
+    except:
+        status_msg = None
+        
     country_key = "vietnam"
     country = COUNTRIES[country_key]
     
+    attempts = 0
+    start_time = time.time()
+    last_ui_update = time.time()
+    
     while autobuy_active.get(chat_id, False):
+        attempts += 1
+        
+        # Update UI setiap 5 detik agar user tahu bot masih jalan
+        now = time.time()
+        if status_msg and (now - last_ui_update > 5):
+            elapsed_m = int((now - start_time) // 60)
+            elapsed_s = int((now - start_time) % 60)
+            try:
+                bot.edit_message_text(
+                    f"🔥 *AUTO BUY VIETNAM AKTIF (BRUTAL MODE)*\n\n"
+                    f"Mencari nomor nonstop sampai saldo habis...\n"
+                    f"Ketik /stopauto untuk berhenti.\n\n"
+                    f"🔄 *Status:* Sedang mencari...\n"
+                    f"📈 *Percobaan API:* {attempts}x\n"
+                    f"⏱ *Waktu berjalan:* {elapsed_m}m {elapsed_s}s",
+                    chat_id, 
+                    status_msg.message_id, 
+                    parse_mode="Markdown"
+                )
+                last_ui_update = now
+            except:
+                pass
+
         res = req_api(api_key, 'getNumber', service=SERVICE, country=country['country_id'])
         
         if 'ACCESS_NUMBER' in res:
@@ -984,6 +1021,18 @@ def autobuy_worker(chat_id, api_key):
                         active_orders[chat_id] = {}
                     active_orders[chat_id][msg.message_id] = [order]
                     threading.Thread(target=auto_check_otp, args=(chat_id, msg.message_id, [order], api_key, country_key), daemon=True).start()
+                    
+                    # Beritahu di log status bahwa baru saja dapat target!
+                    if status_msg:
+                        bot.edit_message_text(
+                            f"🔥 *AUTO BUY VIETNAM AKTIF (BRUTAL MODE)*\n\n"
+                            f"✅ *Nomor Berhasil Didapat! Lanjut mencari...*\n"
+                            f"📈 *Total percobaan:* {attempts}x",
+                            chat_id, 
+                            status_msg.message_id, 
+                            parse_mode="Markdown"
+                        )
+                        last_ui_update = time.time()
                 except Exception as e:
                     print("Error sending autobuy message:", e)
                 
@@ -991,7 +1040,10 @@ def autobuy_worker(chat_id, api_key):
                 
         elif res == 'NO_BALANCE':
             try:
-                bot.send_message(chat_id, "❌ *AUTO BUY BERHENTI*\nSaldo Anda habis!", parse_mode="Markdown")
+                if status_msg:
+                    bot.edit_message_text("❌ *AUTO BUY BERHENTI*\nSaldo Anda habis!", chat_id, status_msg.message_id, parse_mode="Markdown")
+                else:
+                    bot.send_message(chat_id, "❌ *AUTO BUY BERHENTI*\nSaldo Anda habis!", parse_mode="Markdown")
             except: pass
             autobuy_active[chat_id] = False
             break
@@ -1035,7 +1087,7 @@ def stopauto_cmd(message):
     chat_id = message.chat.id
     if autobuy_active.get(chat_id, False):
         autobuy_active[chat_id] = False
-        bot.reply_to(message, "🛑 Autobuy berhasil dihentikan.")
+        bot.reply_to(message, "🛑 Perintah diterima! Autobuy sedang berhenti...", parse_mode="Markdown")
     else:
         bot.reply_to(message, "⚠️ Tidak ada autobuy yang sedang berjalan.")
 
