@@ -28,7 +28,7 @@ SERVICE = "wa"         # WhatsApp service
 # ENV BASED PERMANENT WHITELIST
 # Format: "1234567,9876543,11223344"
 env_whitelist = os.environ.get("WHITELIST_IDS", "")
-PERMANENT_WHITELIST = [int(x.strip()) for x in env_whitelist.split(",") if x.strip().isdigit()]
+PERMANENT_WHITELIST = [int(x.strip()) for x in env_whitelist.split(",") if x.strip().replace('-', '').isdigit()]
 
 # =============================================
 # KONFIGURASI NEGARA
@@ -83,6 +83,14 @@ def init_db():
     )''')
     # Pastikan admin selalu ada di whitelist
     c.execute("INSERT OR IGNORE INTO whitelist (user_id, added_by) VALUES (?, ?)", (ADMIN_ID, ADMIN_ID))
+    
+    # Masukkan otomatis semua ID dari environment variable ke dalam sqlite database
+    env_wl = os.environ.get("WHITELIST_IDS", "")
+    for x in env_wl.split(","):
+        x_clean = x.strip()
+        if x_clean.replace('-', '').isdigit():
+            c.execute("INSERT OR IGNORE INTO whitelist (user_id, added_by) VALUES (?, ?)", (int(x_clean), ADMIN_ID))
+            
     conn.commit()
     conn.close()
 
@@ -91,7 +99,10 @@ def init_db():
 # =============================================
 def is_whitelisted(user_id):
     """Cek apakah user ada di whitelist"""
-    if user_id == ADMIN_ID or user_id in PERMANENT_WHITELIST:
+    env_wl = os.environ.get("WHITELIST_IDS", "")
+    perm_wl = [int(x.strip()) for x in env_wl.split(",") if x.strip().replace('-', '').isdigit()]
+    
+    if user_id == ADMIN_ID or user_id in perm_wl:
         return True
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
@@ -1158,7 +1169,10 @@ def catch_all(message):
 # MAIN
 # =============================================
 if __name__ == '__main__':
+    import os
     init_db()
-    print("GrizzlySMS Bot is running... (LOCKED MODE)")
+    print("Grizzly Bot is running... (LOCKED MODE)")
     print(f"Admin ID: {ADMIN_ID}")
+    env_wl = os.environ.get("WHITELIST_IDS", "")
+    print(f"Loaded WHITELIST_IDS from Railway: '{env_wl}'")
     bot.infinity_polling()
