@@ -555,11 +555,21 @@ def start_cmd(message):
 
     markup = InlineKeyboardMarkup()
     if api_key:
+        # Baris 1: Negara
         markup.row(
             InlineKeyboardButton("🇻🇳 Vietnam", callback_data="country_vietnam"),
             InlineKeyboardButton("🇨🇴 Colombia", callback_data="country_colombia")
         )
-        markup.row(InlineKeyboardButton("💰 Cek Saldo", callback_data="nav_balance"))
+        # Baris 2: Order & Cek Saldo
+        markup.row(
+            InlineKeyboardButton("🛒 Order Baru", callback_data="nav_order"),
+            InlineKeyboardButton("💰 Cek Saldo", callback_data="nav_balance")
+        )
+        # Baris 3: Fitur Auto
+        markup.row(
+            InlineKeyboardButton("🔥 Auto Buy (VN)", callback_data="nav_autobuy"),
+            InlineKeyboardButton("🛑 Stop Auto", callback_data="nav_stopauto")
+        )
     bot.send_message(message.chat.id, text, parse_mode="Markdown", reply_markup=markup)
 
 @bot.message_handler(commands=['help'])
@@ -798,13 +808,25 @@ def callback_q(call):
             bot.send_message(call.message.chat.id, text, parse_mode="Markdown", reply_markup=markup)
 
     # Kembali ke pilihan negara
-    elif data == "back_to_country":
+    elif data == "back_to_country" or data == "nav_order":
         bot.answer_callback_query(call.id)
         markup = InlineKeyboardMarkup()
+        # Baris 1: Negara
         markup.row(
             InlineKeyboardButton("🇻🇳 Vietnam", callback_data="country_vietnam"),
             InlineKeyboardButton("🇨🇴 Colombia", callback_data="country_colombia")
         )
+        # Baris 2: Order & Cek Saldo
+        markup.row(
+            InlineKeyboardButton("🛒 Order Baru", callback_data="nav_order"),
+            InlineKeyboardButton("💰 Cek Saldo", callback_data="nav_balance")
+        )
+        # Baris 3: Fitur Auto
+        markup.row(
+            InlineKeyboardButton("🔥 Auto Buy (VN)", callback_data="nav_autobuy"),
+            InlineKeyboardButton("🛑 Stop Auto", callback_data="nav_stopauto")
+        )
+        
         text = "🌍 *Pilih negara untuk order:*"
         try:
             bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=markup)
@@ -839,6 +861,20 @@ def callback_q(call):
 
     elif data == "cancel_wait":
         bot.answer_callback_query(call.id, "⏳ Belum bisa cancel. Harus tunggu minimal 2 menit sejak order.", show_alert=True)
+        
+    elif data == "nav_autobuy":
+        bot.answer_callback_query(call.id, "🔥 Mengaktifkan Auto Buy...")
+        # Simulate message to reuse logic
+        message = call.message
+        message.from_user = call.from_user
+        autobuy_cmd(message)
+        
+    elif data == "nav_stopauto":
+        bot.answer_callback_query(call.id, "🛑 Menghentikan Auto Buy...")
+        # Simulate message to reuse logic
+        message = call.message
+        message.from_user = call.from_user
+        stopauto_cmd(message)
 
     elif data.startswith("cancelall_"):
         ids_str = data.split("_", 1)[1]
