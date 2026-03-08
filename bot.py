@@ -1094,7 +1094,7 @@ def autobuy_worker(chat_id, api_key):
                 except:
                     pass
                 
-                # Beritahu di log status bahwa baru saja dapat target!
+                # Update status log
                 target_count = len(orders_list)
                 if status_msg:
                     try:
@@ -1109,15 +1109,9 @@ def autobuy_worker(chat_id, api_key):
                         )
                     except: pass
                 
-                # PAUSE AUTO-BUY JIKA ADA NOMOR YANG MASIH WAITING
-                # Ini inti dari permintaan "jangan muncul 1 1 aja" - kita selesaikan satu-satu
-                # agar tidak menumpuk sangat panjang dan merusak timer.
-                while autobuy_active.get(chat_id, False):
-                    active_waiting = [o for o in orders_list if o['status'] == 'waiting']
-                    if not active_waiting:
-                        # Sudah dapat OTP atau Cancel/Timeout, lanjut cari yang lain
-                        break
-                    time.sleep(3) 
+                # JEDA 2 DETIK BIAR GAK KENA BAN TELEGRAM, TAPI LANGSUNG GAS CARI LAGI
+                # Tanpa nunggu nomor lama dapet OTP.
+                time.sleep(2) 
 
         elif res == 'NO_BALANCE':
             try:
