@@ -87,8 +87,8 @@ def init_db():
     # Masukkan otomatis semua ID dari environment variable ke dalam sqlite database
     env_wl = os.environ.get("WHITELIST_IDS", "")
     for x in env_wl.split(","):
-        x_clean = x.strip()
-        if x_clean.replace('-', '').isdigit():
+        x_clean = "".join(filter(str.isdigit, x))
+        if x_clean:
             c.execute("INSERT OR IGNORE INTO whitelist (user_id, added_by) VALUES (?, ?)", (int(x_clean), ADMIN_ID))
             
     conn.commit()
@@ -100,7 +100,11 @@ def init_db():
 def is_whitelisted(user_id):
     """Cek apakah user ada di whitelist"""
     env_wl = os.environ.get("WHITELIST_IDS", "")
-    perm_wl = [int(x.strip()) for x in env_wl.split(",") if x.strip().replace('-', '').isdigit()]
+    perm_wl = []
+    for x in env_wl.split(","):
+        x_clean = "".join(filter(str.isdigit, x))
+        if x_clean:
+            perm_wl.append(int(x_clean))
     
     if user_id == ADMIN_ID or user_id in perm_wl:
         return True
