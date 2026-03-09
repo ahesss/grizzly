@@ -46,12 +46,23 @@ COUNTRIES = {
         "flag": "🇻🇳",
         "country_id": "10",
         "country_code": "84",
+        "maxPrice": "0.20",
+        "minPrice": 0.15,
+    },
+    "philipina": {
+        "name": "Philipina",
+        "flag": "🇵🇭",
+        "country_id": "3",
+        "country_code": "63",
+        "maxPrice": "0.20",
+        "minPrice": 0.15,
     },
     "colombia": {
         "name": "Colombia",
         "flag": "🇨🇴",
         "country_id": "33",
         "country_code": "57",
+        "maxPrice": "0.20",
     },
 }
 
@@ -568,6 +579,7 @@ def start_cmd(message):
         "Pilih negara, lalu pilih jumlah nomor yang ingin di-order.\n\n"
         "🌍 *Negara tersedia:*\n"
         "🇻🇳 Vietnam (Country ID: 10)\n"
+        "🇵🇭 Philipina (Country ID: 3)\n"
         "🇨🇴 Colombia (Country ID: 33)\n\n"
         "📋 *Perintah:*\n"
         "`/setapi API_KEY` — Daftarkan API Key GrizzlySMS\n"
@@ -593,6 +605,9 @@ def start_cmd(message):
         # Baris 1: Negara
         markup.row(
             InlineKeyboardButton("🇻🇳 Vietnam", callback_data="country_vietnam"),
+            InlineKeyboardButton("🇵🇭 Philipina", callback_data="country_philipina")
+        )
+        markup.row(
             InlineKeyboardButton("🇨🇴 Colombia", callback_data="country_colombia")
         )
         # Baris 2: Order & Cek Saldo
@@ -619,6 +634,7 @@ def help_cmd(message):
         "   Dapatkan API Key di: https://grizzlysms.com/docs\n\n"
         "2️⃣ Ketik `/start` lalu pilih negara:\n"
         "   🇻🇳 Vietnam — Country ID 10\n"
+        "   🇵🇭 Philipina — Country ID 3\n"
         "   🇨🇴 Colombia — Country ID 33\n\n"
         "3️⃣ Pilih jumlah nomor yang ingin di-order (1-5)\n\n"
         "4️⃣ Bot akan otomatis cek OTP setiap 5 detik.\n"
@@ -654,6 +670,9 @@ def setapi_cmd(message):
         # Baris 1: Negara
         markup.row(
             InlineKeyboardButton("🇻🇳 Vietnam", callback_data="country_vietnam"),
+            InlineKeyboardButton("🇵🇭 Philipina", callback_data="country_philipina")
+        )
+        markup.row(
             InlineKeyboardButton("🇨🇴 Colombia", callback_data="country_colombia")
         )
         # Baris 2: Order & Cek Saldo
@@ -706,6 +725,9 @@ def order_cmd(message):
     markup = InlineKeyboardMarkup()
     markup.row(
         InlineKeyboardButton("🇻🇳 Vietnam", callback_data="country_vietnam"),
+        InlineKeyboardButton("🇵🇭 Philipina", callback_data="country_philipina")
+    )
+    markup.row(
         InlineKeyboardButton("🇨🇴 Colombia", callback_data="country_colombia")
     )
     bot.send_message(message.chat.id, "🌍 *Pilih negara untuk order:*", parse_mode="Markdown", reply_markup=markup)
@@ -757,7 +779,10 @@ def process_bulk_order(chat_id, api_key, count, country_key="vietnam"):
     failed = 0
 
     for i in range(count):
-        res = req_api(api_key, 'getNumber', service=SERVICE, country=country['country_id'])
+        kwargs = {'service': SERVICE, 'country': country['country_id']}
+        if 'maxPrice' in country: kwargs['maxPrice'] = country['maxPrice']
+        if 'minPrice' in country: kwargs['minPrice'] = country['minPrice']
+        res = req_api(api_key, 'getNumber', **kwargs)
 
         if 'ACCESS_NUMBER' in res:
             parts = res.split(':')
@@ -867,6 +892,9 @@ def callback_q(call):
         # Baris 1: Negara
         markup.row(
             InlineKeyboardButton("🇻🇳 Vietnam", callback_data="country_vietnam"),
+            InlineKeyboardButton("🇵🇭 Philipina", callback_data="country_philipina")
+        )
+        markup.row(
             InlineKeyboardButton("🇨🇴 Colombia", callback_data="country_colombia")
         )
         # Baris 2: Order & Cek Saldo
@@ -1030,7 +1058,10 @@ def autobuy_worker(chat_id, api_key):
             except:
                 pass
 
-        res = req_api(api_key, 'getNumber', service=SERVICE, country=country['country_id'])
+        kwargs = {'service': SERVICE, 'country': country['country_id']}
+        if 'maxPrice' in country: kwargs['maxPrice'] = country['maxPrice']
+        if 'minPrice' in country: kwargs['minPrice'] = country['minPrice']
+        res = req_api(api_key, 'getNumber', **kwargs)
         
         if 'ACCESS_NUMBER' in res:
             parts = res.split(':')
