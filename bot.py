@@ -737,51 +737,15 @@ def process_bulk_order(chat_id, api_key, count, country_key="vietnam"):
     country = COUNTRIES.get(country_key, COUNTRIES["vietnam"])
     country_label = get_country_label(country_key)
     country_id_str = str(country['country_id'])
-
-    # Cek Harga dengan cara aman (timeout ketat agar tidak ganggu order)
-    price_val = None
-    try:
-        # Panggil API dengan timeout lebih pendek khusus harga
-        params = {'api_key': api_key, 'action': 'getPrices', 'service': SERVICE, 'country': country_id_str}
-        r_p = requests.get(API_BASE, params=params, timeout=5)
-        res_price = r_p.text.strip()
-        
-        if res_price and res_price.startswith("{"):
-            try:
-                data = json.loads(res_price)
-                # Coba cari harga dengan berbagai format JSON (Country/Service atau Service/Country)
-                inner = None
-                if country_id_str in data and SERVICE in data[country_id_str]:
-                    inner = data[country_id_str][SERVICE]
-                elif SERVICE in data and country_id_str in data[SERVICE]:
-                    inner = data[SERVICE][country_id_str]
-                
-                if inner and isinstance(inner, dict):
-                    if "cost" in inner:
-                        price_val = inner["cost"]
-                    else:
-                        # Jika formatnya {"0.18": 10, "0.20": 5}, ambil yang termurah
-                        numeric_keys = [float(k) for k in inner.keys() if k.replace('.', '', 1).isdigit()]
-                        if numeric_keys:
-                            price_val = min(numeric_keys)
-            except:
-                pass
-    except:
-        pass
-
-    # Beri jeda sangat singkat agar API tidak overload sebelum order
-    if price_val:
-        time.sleep(0.5)
-
+    
     msg = bot.send_message(chat_id, f"⏳ Sedang memesan {count} nomor WA {country_label}...", parse_mode="Markdown")
-
     orders = []
     failed = 0
+    price_val = None
 
     for i in range(count):
         kwargs = {'service': SERVICE, 'country': country['country_id']}
         if 'maxPrice' in country: kwargs['maxPrice'] = country['maxPrice']
-        if 'minPrice' in country: kwargs['minPrice'] = country['minPrice']
         res = req_api(api_key, 'getNumber', **kwargs)
 
         if 'ACCESS_NUMBER' in res:
@@ -789,6 +753,31 @@ def process_bulk_order(chat_id, api_key, count, country_key="vietnam"):
             if len(parts) >= 3:
                 t_id = parts[1]
                 number = parts[2]
+                
+                # Fetch price for THIS specific number to make sure it's below our max
+                p_val = price_val
+                if p_val is None:
+                    try:
+                        params = {'api_key': api_key, 'action': 'getPrices', 'service': SERVICE, 'country': country_id_str}
+                        r_p = requests.get(API_BASE, params=params, timeout=3)
+                        p_data = json.loads(r_p.text.strip())
+                        inner = p_data.get(country_id_str, {}).get(SERVICE, {})
+                        if not inner: inner = p_data.get(SERVICE, {}).get(country_id_str, {})
+                        if inner and isinstance(inner, dict):
+                            if "cost" in inner: p_val = inner["cost"]
+                            else:
+                                n_keys = [float(k) for k in inner.keys() if k.replace('.','',1).isdigit()]
+                                if n_keys: p_val = min(n_keys)
+                    except: pass
+                
+                # Cek jika Max Price terlampaui (Grizzly terkadang mengabaikan argumen maxPrice)
+                if 'maxPrice' in country and p_val is not None:
+                    if float(p_val) > float(country['maxPrice']):
+                        # Cancel order if price is too high
+                        try: req_api(api_key, 'setStatus', status='8', id=t_id)
+                        except: pass
+                        continue
+
                 orders.append({
                     'id': t_id,
                     'number': number,
@@ -796,7 +785,7 @@ def process_bulk_order(chat_id, api_key, count, country_key="vietnam"):
                     'code': None,
                     'order_time': time.time(),
                     'country_key': country_key,
-                    'price': price_val
+                    'price': p_val
                 })
         elif res == 'NO_BALANCE':
             bot.edit_message_text(
@@ -1060,7 +1049,6 @@ def autobuy_worker(chat_id, api_key):
 
         kwargs = {'service': SERVICE, 'country': country['country_id']}
         if 'maxPrice' in country: kwargs['maxPrice'] = country['maxPrice']
-        if 'minPrice' in country: kwargs['minPrice'] = country['minPrice']
         res = req_api(api_key, 'getNumber', **kwargs)
         
         if 'ACCESS_NUMBER' in res:
@@ -1068,7 +1056,6 @@ def autobuy_worker(chat_id, api_key):
             if len(parts) >= 3:
                 t_id = parts[1]
                 number = parts[2]
-                order_counter += 1 # NAIKKAN NOMOR URUT
                 
                 # Fetch price
                 price_val = None
@@ -1089,6 +1076,15 @@ def autobuy_worker(chat_id, api_key):
                             if numeric_keys: price_val = min(numeric_keys)
                 except: pass
 
+                # VERIFIKASI HARGA (Jika harga melebihi batasan, cancel otomatis)
+                if 'maxPrice' in country and price_val is not None:
+                    if float(price_val) > float(country['maxPrice']):
+                        try: req_api(api_key, 'setStatus', status='8', id=t_id)
+                        except: pass
+                        continue # Langsung lanjut cari nomor lain
+
+                order_counter += 1 # NAIKKAN NOMOR URUT SETELAH DICEK HARGA
+                
                 order = {
                     'id': t_id,
                     'number': number,
