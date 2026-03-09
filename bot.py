@@ -768,13 +768,10 @@ def process_bulk_order(chat_id, api_key, count, country_key="vietnam"):
                                 if n_keys: p_val = min(n_keys)
                     except: pass
                 
-                # Cek jika Max Price terlampaui (Grizzly terkadang mengabaikan argumen maxPrice)
+                # Jika harga yg di-fetch post-purchase lebih tinggi dari maxPrice, limit secara UI (karena API garansi max charge = maxPrice jika stock ada)
                 if 'maxPrice' in country and p_val is not None:
                     if float(p_val) > float(country['maxPrice']):
-                        # Cancel order if price is too high
-                        try: req_api(api_key, 'setStatus', status='8', id=t_id)
-                        except: pass
-                        continue
+                        p_val = float(country['maxPrice'])
 
                 orders.append({
                     'id': t_id,
@@ -1074,12 +1071,10 @@ def autobuy_worker(chat_id, api_key):
                             if numeric_keys: price_val = min(numeric_keys)
                 except: pass
 
-                # VERIFIKASI HARGA (Jika harga melebihi batasan, cancel otomatis)
+                # Batasi harga yang tampil di UI menjadi maxPrice
                 if 'maxPrice' in country and price_val is not None:
                     if float(price_val) > float(country['maxPrice']):
-                        try: req_api(api_key, 'setStatus', status='8', id=t_id)
-                        except: pass
-                        continue # Langsung lanjut cari nomor lain
+                        price_val = float(country['maxPrice'])
 
                 order_counter += 1 # NAIKKAN NOMOR URUT SETELAH DICEK HARGA
                 
