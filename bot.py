@@ -399,9 +399,7 @@ def auto_check_otp(chat_id, message_id, orders, api_key, country_key="vietnam", 
                 time.sleep(0.3)
 
             now = time.time()
-            # In individual message mode, we update timer less frequently to avoid global rate limits
-            # across many active messages. Status change (changed=True) always updates immediately.
-            should_update = changed or (now - last_timer_update >= 20)
+            should_update = changed or (now - last_timer_update >= 4)
 
             if should_update and (now - last_edit_time >= EDIT_COOLDOWN):
                 remaining = [o for o in orders if o['status'] == 'waiting']
