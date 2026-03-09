@@ -398,7 +398,8 @@ def auto_check_otp(chat_id, message_id, orders, api_key, country_key="vietnam", 
                 time.sleep(0.3)
 
             now = time.time()
-            should_update = changed or (now - last_timer_update >= 4)
+            ui_limit = 12 if is_autobuy_mode else 4
+            should_update = changed or (now - last_timer_update >= ui_limit)
 
             if should_update and (now - last_edit_time >= EDIT_COOLDOWN):
                 remaining = [o for o in orders if o['status'] == 'waiting']
@@ -1100,10 +1101,19 @@ def autobuy_worker(chat_id, api_key):
                 markup = InlineKeyboardMarkup()
                 markup.row(InlineKeyboardButton(f"⏳ Cancel tersedia ~2 menit lagi", callback_data="cancel_wait"))
                 
-                try:
-                    # Kirim Balon Chat Baru (Pop Up)
-                    msg = bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=markup)
-                    
+                msg = None
+                for _ in range(3):
+                    try:
+                        # Kirim Balon Chat Baru (Pop Up)
+                        msg = bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=markup)
+                        break
+                    except Exception as e:
+                        if "retry after" in str(e).lower() or "too many requests" in str(e).lower():
+                            time.sleep(5)
+                        else:
+                            time.sleep(1)
+                
+                if msg:
                     # Daftarkan ke active_orders agar bisa dicancel manual jika perlu
                     if chat_id not in active_orders:
                         active_orders[chat_id] = {}
@@ -1111,8 +1121,11 @@ def autobuy_worker(chat_id, api_key):
                     
                     # Jalankan monitoring OTP khusus untuk pesan ini saja (Pass s_idx untuk numbering yg bener)
                     threading.Thread(target=auto_check_otp, args=(chat_id, msg.message_id, single_order_list, api_key, country_key, True, order_counter)).start()
-                except:
-                    pass
+                else:
+                    # Gagal kirim interface bahkan setelah di-retry (Rate Limit keras)
+                    # Demi cegah saldo hilang tanpa ada wujud di telegram, kita paksa cancel dari server
+                    try: req_api(api_key, 'setStatus', status='8', id=t_id)
+                    except: pass
                 
                 # Update status log utamanya
                 if status_msg:
