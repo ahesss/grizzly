@@ -937,7 +937,7 @@ def callback_q(call):
         bot.answer_callback_query(call.id, "⏳ Belum bisa cancel. Harus tunggu minimal 2 menit sejak order.", show_alert=True)
     elif data == "nav_autobuy":
         markup = InlineKeyboardMarkup()
-        markup.row(InlineKeyboardButton("🇻🇳 VN", callback_data="auto_vietnam"), InlineKeyboardButton("🇲🇽 MX", callback_data="auto_mexico"))
+        markup.row(InlineKeyboardButton("🇻🇳 VN", callback_data="auto_vietnam"), InlineKeyboardButton("🇵🇭 PH", callback_data="auto_philipina"), InlineKeyboardButton("🇨🇴 CO", callback_data="auto_colombia"), InlineKeyboardButton("🇲🇽 MX", callback_data="auto_mexico"))
         try:
             bot.edit_message_text("🚀 *Pilih negara Auto Buy:*", call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=markup)
         except:
