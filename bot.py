@@ -1052,7 +1052,7 @@ def autobuy_worker(chat_id, api_key):
                 pass
 
         kwargs = {'service': SERVICE, 'country': country['country_id']}
-        if 'maxPrice' in country: kwargs['maxPrice'] = country['maxPrice']
+        # if 'maxPrice' in country: kwargs['maxPrice'] = country['maxPrice']
         res = req_api(api_key, 'getNumber', **kwargs)
         
         if 'ACCESS_NUMBER' in res:
@@ -1080,11 +1080,8 @@ def autobuy_worker(chat_id, api_key):
                             if numeric_keys: price_val = min(numeric_keys)
                 except: pass
 
-                # Batasi harga yang tampil di UI menjadi maxPrice
-                if 'maxPrice' in country and price_val is not None:
-                    if float(price_val) > float(country['maxPrice']):
-                        price_val = float(country['maxPrice'])
-
+                # Harga tetap asli yang ditampilkan
+                
                 order_counter += 1 # NAIKKAN NOMOR URUT SETELAH DICEK HARGA
                 
                 order = {
