@@ -64,6 +64,12 @@ COUNTRIES = {
         "country_code": "57",
         "maxPrice": "0.20",
     },
+    "mexico": {
+        "name": "Mexico",
+        "flag": "🇲🇽",
+        "country_id": "54",
+        "country_code": "52",
+    },
 }
 
 # Menyimpan data order aktif per chat_id agar callback bisa akses
@@ -578,7 +584,8 @@ def start_cmd(message):
         "🌍 *Negara tersedia:*\n"
         "🇻🇳 Vietnam (Country ID: 10)\n"
         "🇵🇭 Philipina (Country ID: 3)\n"
-        "🇨🇴 Colombia (Country ID: 33)\n\n"
+        "🇨🇴 Colombia (Country ID: 33)\n"
+        "🇲🇽 Mexico (Country ID: 54)\n\n"
         "📋 *Perintah:*\n"
         "`/setapi API_KEY` — Daftarkan API Key GrizzlySMS\n"
         "`/order N` — Order N nomor (pilih negara dulu)\n"
@@ -606,7 +613,8 @@ def start_cmd(message):
             InlineKeyboardButton("🇵🇭 Philipina", callback_data="country_philipina")
         )
         markup.row(
-            InlineKeyboardButton("🇨🇴 Colombia", callback_data="country_colombia")
+            InlineKeyboardButton("🇨🇴 Colombia", callback_data="country_colombia"),
+            InlineKeyboardButton("🇲🇽 Mexico", callback_data="country_mexico")
         )
         # Baris 2: Order & Cek Saldo
         markup.row(
@@ -726,7 +734,8 @@ def order_cmd(message):
         InlineKeyboardButton("🇵🇭 Philipina", callback_data="country_philipina")
     )
     markup.row(
-        InlineKeyboardButton("🇨🇴 Colombia", callback_data="country_colombia")
+        InlineKeyboardButton("🇨🇴 Colombia", callback_data="country_colombia"),
+        InlineKeyboardButton("🇲🇽 Mexico", callback_data="country_mexico")
     )
     bot.send_message(message.chat.id, "🌍 *Pilih negara untuk order:*", parse_mode="Markdown", reply_markup=markup)
 
