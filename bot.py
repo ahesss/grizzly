@@ -623,7 +623,7 @@ def start_cmd(message):
         )
         # Baris 3: Fitur Auto
         markup.row(
-            InlineKeyboardButton("🔥 Auto Buy (VN)", callback_data="nav_autobuy"),
+            InlineKeyboardButton("🔥 Auto Buy", callback_data="nav_autobuy"),
             InlineKeyboardButton("🛑 Stop Auto", callback_data="nav_stopauto")
         )
     bot.send_message(message.chat.id, text, parse_mode="Markdown", reply_markup=markup)
@@ -688,7 +688,7 @@ def setapi_cmd(message):
         )
         # Baris 3: Fitur Auto
         markup.row(
-            InlineKeyboardButton("🔥 Auto Buy (VN)", callback_data="nav_autobuy"),
+            InlineKeyboardButton("🔥 Auto Buy", callback_data="nav_autobuy"),
             InlineKeyboardButton("🛑 Stop Auto", callback_data="nav_stopauto")
         )
         
@@ -897,7 +897,7 @@ def callback_q(call):
         )
         # Baris 3: Fitur Auto
         markup.row(
-            InlineKeyboardButton("🔥 Auto Buy (VN)", callback_data="nav_autobuy"),
+            InlineKeyboardButton("🔥 Auto Buy", callback_data="nav_autobuy"),
             InlineKeyboardButton("🛑 Stop Auto", callback_data="nav_stopauto")
         )
         
