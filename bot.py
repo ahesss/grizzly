@@ -935,13 +935,18 @@ def callback_q(call):
 
     elif data == "cancel_wait":
         bot.answer_callback_query(call.id, "⏳ Belum bisa cancel. Harus tunggu minimal 2 menit sejak order.", show_alert=True)
-        
     elif data == "nav_autobuy":
-        bot.answer_callback_query(call.id, "🔥 Mengaktifkan Auto Buy...")
-        # Simulate message to reuse logic
-        message = call.message
-        message.from_user = call.from_user
-        autobuy_cmd(message)
+        markup = InlineKeyboardMarkup()
+        markup.row(InlineKeyboardButton("🇻🇳 VN", callback_data="auto_vietnam"), InlineKeyboardButton("🇲🇽 MX", callback_data="auto_mexico"))
+        try:
+            bot.edit_message_text("🚀 *Pilih negara Auto Buy:*", call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=markup)
+        except:
+            bot.send_message(call.message.chat.id, "🚀 *Pilih negara Auto Buy:*", parse_mode="Markdown", reply_markup=markup)
+    elif data.startswith("auto_"):
+        country_key = data.replace("auto_", "")
+        bot.answer_callback_query(call.id, f"🔥 Mengaktifkan Auto Buy {country_key.upper()}...")
+        autobuy_active[call.message.chat.id] = country_key
+        threading.Thread(target=autobuy_worker, args=(call.message.chat.id, api_key, country_key), daemon=True).start()
         
     elif data == "nav_stopauto":
         bot.answer_callback_query(call.id, "🛑 Menghentikan Auto Buy...")
@@ -1001,11 +1006,12 @@ def callback_q(call):
 # =============================================
 autobuy_active = {}
 
-def autobuy_worker(chat_id, api_key):
+def autobuy_worker(chat_id, api_key, country_key="vietnam"):
+    country_label = get_country_label(country_key).upper()
     try:
         status_msg = bot.send_message(
             chat_id, 
-            "🔥 *AUTO BUY VIETNAM AKTIF (BRUTAL MODE)*\n\n"
+            f"🔥 *AUTO BUY {country_label} AKTIF (BRUTAL MODE)*\n\n"
             "Mencari nomor nonstop sampai saldo habis...\n"
             "Ketik /stopauto untuk berhenti.\n\n"
             "⏳ *Status:* Memulai pencarian...", 
@@ -1014,8 +1020,7 @@ def autobuy_worker(chat_id, api_key):
     except:
         status_msg = None
         
-    country_key = "vietnam"
-    country = COUNTRIES[country_key]
+    country = COUNTRIES.get(country_key, COUNTRIES["vietnam"])
     
     attempts = 0
     start_time = time.time()
@@ -1025,7 +1030,7 @@ def autobuy_worker(chat_id, api_key):
     orders_list = []
     order_counter = 0 # TAMBAHKAN COUNTER
     
-    while autobuy_active.get(chat_id, False):
+    while autobuy_active.get(chat_id):
         attempts += 1
         
         # Update log status agar user tahu bot masih jalan
@@ -1036,7 +1041,7 @@ def autobuy_worker(chat_id, api_key):
             target_count = len(orders_list)
             try:
                 bot.edit_message_text(
-                    f"🔥 *AUTO BUY VIETNAM AKTIF (BRUTAL MODE)*\n\n"
+                    f"🔥 *AUTO BUY {country_label} AKTIF (BRUTAL MODE)*\n\n"
                     f"Mencari nomor nonstop sampai saldo habis...\n"
                     f"Ketik /stopauto untuk berhenti.\n\n"
                     f"🔄 *Status:* Sedang mencari...\n"
@@ -1138,7 +1143,7 @@ def autobuy_worker(chat_id, api_key):
                     try:
                         target_count = len(orders_list)
                         bot.edit_message_text(
-                            f"🔥 *AUTO BUY VIETNAM AKTIF (BRUTAL MODE)*\n\n"
+                            f"🔥 *AUTO BUY {country_label} AKTIF (BRUTAL MODE)*\n\n"
                             f"✅ *Target {order_counter} Didapat! Lanjut cari...*\n"
                             f"📈 *Total percobaan:* {attempts}x\n"
                             f"🎯 *Total didapat:* {target_count} nomor",
@@ -1191,8 +1196,8 @@ def autobuy_cmd(message):
         bot.reply_to(message, "⚠️ Autobuy sudah berjalan! Ketik /stopauto untuk menghentikan.")
         return
         
-    autobuy_active[chat_id] = True
-    threading.Thread(target=autobuy_worker, args=(chat_id, api_key), daemon=True).start()
+    autobuy_active[chat_id] = "vietnam"
+    threading.Thread(target=autobuy_worker, args=(chat_id, api_key, "vietnam"), daemon=True).start()
 
 @bot.message_handler(commands=['stopauto'])
 def stopauto_cmd(message):
